@@ -90,6 +90,10 @@ Cette partie fonctionne en conjonction avec GTFS Schedule.
 
 GTFS Realtime est une spécification de flux qui permet aux agences de transports publics de fournir des informations à jour sur les heures d’arrivée et de départ actuelles, les alertes de service et la position du véhicule, permettant aux utilisateurs de planifier en douceur leurs déplacements. 
 
+### Package python disponible
+
+Le package python GTFS-realtime-bindings (https://github.com/MobilityData/gtfs-realtime-bindings/blob/master/python/README.md) fournit des classes python générée suivant les spécifications du Buffer Protocol du repo GTFS-realtime (https://github.com/google/transit/tree/master/gtfs-realtime). Ces classes permettent de traiter des données sous forme de Protocol Buffer GTFS-RT binaire au sein des projets python.
+
 
 
 ## Simple et facile à utiliser
