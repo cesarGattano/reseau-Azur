@@ -206,5 +206,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Base de données
+# Airflow
+dags/files/
 data/
+config/
+logs/
