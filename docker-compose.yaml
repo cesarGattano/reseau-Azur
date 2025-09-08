@@ -76,12 +76,14 @@ x-airflow-common:
     # for other purpose (development, test and especially production usage) build/extend Airflow image.
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
     # The following line can be used to set a custom config file, stored in the local config folder
-    AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    WORK_DIR: ${WORK_DIR:-/opt/airflow}
+    AIRFLOW_CONFIG: '${WORK_DIR:-/opt/airflow}/config/airflow.cfg'
+    GTFS_SCHEDULE_URL: ${GTFS_SCHEDULE_URL}
   volumes:
-    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
-    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
-    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
-    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/dags:${WORK_DIR:-/opt/airflow}/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/logs:${WORK_DIR:-/opt/airflow}/logs
+    - ${AIRFLOW_PROJ_DIR:-.}/config:${WORK_DIR:-/opt/airflow}/config
+    - ${AIRFLOW_PROJ_DIR:-.}/plugins:${WORK_DIR:-/opt/airflow}/plugins
   networks:
     - reseauazur-network
   user: "${AIRFLOW_UID:-50000}:0"
@@ -308,14 +310,14 @@ services:
         echo
         echo "Creating missing opt dirs if missing:"
         echo
-        mkdir -v -p /opt/airflow/{logs,dags,plugins,config}
+        mkdir -v -p ${WORK_DIR:-/opt/airflow}/{logs,dags,plugins,config}
         echo
         echo "Airflow version:"
         /entrypoint airflow version
         echo
         echo "Files in shared volumes:"
         echo
-        ls -la /opt/airflow/{logs,dags,plugins,config}
+        ls -la ${WORK_DIR:-/opt/airflow}/{logs,dags,plugins,config}
         echo
         echo "Running airflow config list to create default config file if missing."
         echo
@@ -323,19 +325,19 @@ services:
         echo
         echo "Files in shared volumes:"
         echo
-        ls -la /opt/airflow/{logs,dags,plugins,config}
+        ls -la ${WORK_DIR:-/opt/airflow}/{logs,dags,plugins,config}
         echo
-        echo "Change ownership of files in /opt/airflow to ${AIRFLOW_UID}:0"
+        echo "Change ownership of files in ${WORK_DIR:-/opt/airflow} to ${AIRFLOW_UID}:0"
         echo
-        chown -R "${AIRFLOW_UID}:0" /opt/airflow/
+        chown -R "${AIRFLOW_UID}:0" ${WORK_DIR:-/opt/airflow}/
         echo
         echo "Change ownership of files in shared volumes to ${AIRFLOW_UID}:0"
         echo
-        chown -v -R "${AIRFLOW_UID}:0" /opt/airflow/{logs,dags,plugins,config}
+        chown -v -R "${AIRFLOW_UID}:0" ${WORK_DIR:-/opt/airflow}/{logs,dags,plugins,config}
         echo
         echo "Files in shared volumes:"
         echo
-        ls -la /opt/airflow/{logs,dags,plugins,config}
+        ls -la ${WORK_DIR:-/opt/airflow}/{logs,dags,plugins,config}
 
     # yamllint enable rule:line-length
     networks:
