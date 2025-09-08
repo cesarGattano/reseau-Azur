@@ -7,7 +7,7 @@ TP de pratique d'ETL (Airflow - duckDB) sur des données au standard GTFS &amp; 
 Création des répertoires nécessaires et gestion de droits
 
 ```
-mkdir -p ./dags ./logs ./plugins ./config
+mkdir -p ./dags ./logs ./plugins ./config ./data
 echo -e "AIRFLOW_UID=$(id -u)" >> .env
 ```
 
