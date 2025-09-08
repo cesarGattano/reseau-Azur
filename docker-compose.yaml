@@ -86,6 +86,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/logs:${WORK_DIR:-/opt/airflow}/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:${WORK_DIR:-/opt/airflow}/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:${WORK_DIR:-/opt/airflow}/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/data:${WORK_DIR:-/opt/airflow}/data
   networks:
     - reseauazur-network
   user: "${AIRFLOW_UID:-50000}:0"
