@@ -1,6 +1,7 @@
 import os
 import pendulum
 import pandas as pd
+from datetime import timedelta
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.sensors.bash import BashSensor
@@ -75,13 +76,13 @@ with DAG(
         timeout=60,
     )
 
-    s3_4 = BashSensor(
-        task_id="check_stop_times_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
-    )
+    # s3_4 = BashSensor(
+    #     task_id="check_stop_times_file",
+    #     bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times",
+    #     retry_exit_code=1,
+    #     poke_interval=10,
+    #     timeout=60,
+    # )
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     t4_1 = BashOperator(
@@ -91,11 +92,36 @@ with DAG(
         """,
     )
 
+    t4_2 = BashOperator(
+        task_id="copy_stops_file",
+        bash_command=f"""
+        cp {os.environ["WORK_DIR"]}/data/schedule_temp/stops.txt {os.environ["WORK_DIR"]}/data/schedule/stops.csv
+        """,
+    )
+
+    t4_3 = BashOperator(
+        task_id="copy_trips_file",
+        bash_command=f"""
+        cp {os.environ["WORK_DIR"]}/data/schedule_temp/trips.txt {os.environ["WORK_DIR"]}/data/schedule/trips.csv
+        """,
+    )
+
+    # t4_4 = BashOperator(
+    #     task_id="copy_stop_times_file",
+    #     bash_command=f"""
+    #     cp {os.environ["WORK_DIR"]}/data/schedule_temp/stop_times.txt {os.environ["WORK_DIR"]}/data/schedule/stop_times.csv
+    #     """,
+    # )
+
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    @task(task_id="create_dim_route_table")
+    @task(
+        task_id="create_dim_route_table",
+        retries=10,
+        retry_delay=timedelta(seconds=10),
+    )
     def t5_1():
         """
-        Use DuckDB to select a subset of the data
+        (Re)create the dim_route table in DuckDB from the associated csv-file.
         """
         hook = DuckDBHook.get_hook("duckdb_default")
         conn = hook.get_conn()
@@ -110,5 +136,51 @@ with DAG(
         print(conn.sql("SELECT COUNT(*) FROM dim_route").fetchone()[0])
         conn.close()
 
+    @task(
+        task_id="create_dim_stop_table",
+        retries=10,
+        retry_delay=timedelta(seconds=10),
+    )
+    def t5_2():
+        """
+        (Re)create the dim_stop table in DuckDB from the associated csv-file.
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # execute a simple query
+        sql_query = f"""
+            CREATE TABLE IF NOT EXISTS dim_stop AS
+            SELECT stop_id, parent_station, stop_name, stop_lat, stop_lon, location_type
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/stops.csv'
+            """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM dim_stop").fetchone()[0])
+        conn.close()
+
+    @task(
+        task_id="create_dim_trip_table",
+        retries=10,
+        retry_delay=timedelta(seconds=10),
+    )
+    def t5_3():
+        """
+        (Re)create the dim_trip table in DuckDB from the associated csv-file.
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # execute a simple query
+        sql_query = f"""
+            CREATE TABLE IF NOT EXISTS dim_trip AS
+            SELECT trip_id, trip_headsign, trip_short_name, direction_id
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/trips.csv'
+            """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM dim_trip").fetchone()[0])
+        conn.close()
+
     t0 >> t1 >> t2
     s3_1 >> t4_1 >> t5_1()
+    s3_2 >> t4_2 >> t5_2()
+    s3_3 >> t4_3 >> t5_3()
