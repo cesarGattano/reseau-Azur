@@ -1,9 +1,12 @@
 import os
 import pendulum
+import pandas as pd
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.sensors.bash import BashSensor
 from airflow.sdk import DAG
+from airflow.decorators import task
+from duckdb_provider.hooks.duckdb_hook import DuckDBHook
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -50,7 +53,7 @@ with DAG(
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     s3_1 = BashSensor(
         task_id="check_routes_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh routes.txt",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh routes",
         retry_exit_code=1,
         poke_interval=10,
         timeout=60,
@@ -58,7 +61,7 @@ with DAG(
 
     s3_2 = BashSensor(
         task_id="check_stops_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stops.txt",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stops",
         retry_exit_code=1,
         poke_interval=10,
         timeout=60,
@@ -66,7 +69,7 @@ with DAG(
 
     s3_3 = BashSensor(
         task_id="check_trips_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh trips.txt",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh trips",
         retry_exit_code=1,
         poke_interval=10,
         timeout=60,
@@ -74,7 +77,7 @@ with DAG(
 
     s3_4 = BashSensor(
         task_id="check_stop_times_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times.txt",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times",
         retry_exit_code=1,
         poke_interval=10,
         timeout=60,
@@ -84,9 +87,28 @@ with DAG(
     t4_1 = BashOperator(
         task_id="copy_routes_file",
         bash_command=f"""
-        cp {os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt {os.environ["WORK_DIR"]}/data/schedule/
+        cp {os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt {os.environ["WORK_DIR"]}/data/schedule/routes.csv
         """,
     )
 
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    @task(task_id="create_dim_route_table")
+    def t5_1():
+        """
+        Use DuckDB to select a subset of the data
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # execute a simple query
+        sql_query = f"""
+            CREATE TABLE IF NOT EXISTS dim_route AS
+            SELECT route_id, route_type, route_short_name, route_long_name, route_color
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/routes.csv'
+            """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM dim_route").fetchone()[0])
+        conn.close()
+
     t0 >> t1 >> t2
-    s3_1 >> t4_1
+    s3_1 >> t4_1 >> t5_1()
