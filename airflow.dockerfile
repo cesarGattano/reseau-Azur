@@ -6,11 +6,17 @@ USER root
 
 # Install additionnal tools
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-  unzip \
-  && apt-get autoremove -yqq --purge \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+    unzip \
+    && apt-get autoremove -yqq --purge \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # switch to airflow
 USER airflow
+
+# Collect requirements
+COPY requirements.txt .
+
+# Installing requirements
+RUN pip install --no-cache-dir -r requirements.txt

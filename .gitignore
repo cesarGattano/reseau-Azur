@@ -211,3 +211,6 @@ dags/files/
 data/
 config/
 logs/
+
+# Database
+*.db

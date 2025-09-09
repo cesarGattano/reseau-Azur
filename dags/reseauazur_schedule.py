@@ -1,9 +1,14 @@
 import os
 import pendulum
+import pandas as pd
+from datetime import timedelta
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.sensors.bash import BashSensor
+from airflow.providers.standard.sensors.filesystem import FileSensor
 from airflow.sdk import DAG
+from airflow.decorators import task
+from duckdb_provider.hooks.duckdb_hook import DuckDBHook
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -48,45 +53,158 @@ with DAG(
     )
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    s3_1 = BashSensor(
-        task_id="check_routes_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh routes.txt",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
+    s3_1 = FileSensor(
+        task_id="wait_routes_file",
+        filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt",
+        fs_conn_id="airflow_pg_conn",
     )
 
-    s3_2 = BashSensor(
-        task_id="check_stops_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stops.txt",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
+    s3_2 = FileSensor(
+        task_id="wait_stops_file",
+        filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/stops.txt",
+        fs_conn_id="airflow_pg_conn",
     )
 
-    s3_3 = BashSensor(
-        task_id="check_trips_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh trips.txt",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
-    )
-
-    s3_4 = BashSensor(
-        task_id="check_stop_times_file",
-        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times.txt",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
+    s3_3 = FileSensor(
+        task_id="wait_trips_file",
+        filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/trips.txt",
+        fs_conn_id="airflow_pg_conn",
     )
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     t4_1 = BashOperator(
+        task_id="check_routes_file",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh routes",
+        skip_on_exit_code=99,
+    )
+
+    t4_2 = BashOperator(
+        task_id="check_stops_file",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stops",
+        skip_on_exit_code=99,
+    )
+
+    t4_3 = BashOperator(
+        task_id="check_trips_file",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh trips",
+        skip_on_exit_code=99,
+    )
+
+    # s3_4 = BashSensor(
+    #     task_id="check_stop_times_file",
+    #     bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times",
+    #     retry_exit_code=1,
+    #     poke_interval=10,
+    #     timeout=60,
+    # )
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    t5_1 = BashOperator(
         task_id="copy_routes_file",
         bash_command=f"""
-        cp {os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt {os.environ["WORK_DIR"]}/data/schedule/
+        cp {os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt {os.environ["WORK_DIR"]}/data/schedule/routes.csv
         """,
     )
 
+    t5_2 = BashOperator(
+        task_id="copy_stops_file",
+        bash_command=f"""
+        cp {os.environ["WORK_DIR"]}/data/schedule_temp/stops.txt {os.environ["WORK_DIR"]}/data/schedule/stops.csv
+        """,
+    )
+
+    t5_3 = BashOperator(
+        task_id="copy_trips_file",
+        bash_command=f"""
+        cp {os.environ["WORK_DIR"]}/data/schedule_temp/trips.txt {os.environ["WORK_DIR"]}/data/schedule/trips.csv
+        """,
+    )
+
+    # t4_4 = BashOperator(
+    #     task_id="copy_stop_times_file",
+    #     bash_command=f"""
+    #     cp {os.environ["WORK_DIR"]}/data/schedule_temp/stop_times.txt {os.environ["WORK_DIR"]}/data/schedule/stop_times.csv
+    #     """,
+    # )
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    @task(
+        task_id="create_dim_route_table",
+        retries=10,
+        retry_delay=timedelta(seconds=10),
+    )
+    def t6_1():
+        """
+        (Re)create the dim_route table in DuckDB from the associated csv-file.
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # execute a simple query
+        sql_query = f"""
+            CREATE TABLE IF NOT EXISTS dim_route AS
+            SELECT route_id, route_type, route_short_name, route_long_name, route_color
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/routes.csv'
+            """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM dim_route").fetchone()[0])
+        conn.close()
+
+    @task(
+        task_id="create_dim_stop_table",
+        retries=10,
+        retry_delay=timedelta(seconds=10),
+    )
+    def t6_2():
+        """
+        (Re)create the dim_stop table in DuckDB from the associated csv-file.
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # execute a simple query
+        sql_query = f"""
+            CREATE TABLE IF NOT EXISTS dim_stop AS
+            SELECT stop_id, parent_station, stop_name, stop_lat, stop_lon, location_type
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/stops.csv'
+            """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM dim_stop").fetchone()[0])
+        conn.close()
+
+    @task(
+        task_id="create_dim_trip_table",
+        retries=10,
+        retry_delay=timedelta(seconds=10),
+    )
+    def t6_3():
+        """
+        (Re)create the dim_trip table in DuckDB from the associated csv-file.
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # execute a simple query
+        sql_query = f"""
+            CREATE TABLE IF NOT EXISTS dim_trip AS
+            SELECT trip_id, trip_headsign, trip_short_name, direction_id
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/trips.csv'
+            """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM dim_trip").fetchone()[0])
+        conn.close()
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    t7 = BashOperator(
+        task_id="remove_txt_files",
+        bash_command=f"""
+        cd {os.environ["WORK_DIR"]}/data/schedule_temp;
+        rm *.txt
+        """,
+        trigger_rule="all_done",
+    )
+
     t0 >> t1 >> t2
-    s3_1 >> t4_1
+    s3_1 >> t4_1 >> t5_1 >> t6_1() >> t7
+    s3_2 >> t4_2 >> t5_2 >> t6_2() >> t7
+    s3_3 >> t4_3 >> t5_3 >> t6_3() >> t7
