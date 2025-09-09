@@ -5,6 +5,7 @@ from datetime import timedelta
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.sensors.bash import BashSensor
+from airflow.providers.standard.sensors.filesystem import FileSensor
 from airflow.sdk import DAG
 from airflow.decorators import task
 from duckdb_provider.hooks.duckdb_hook import DuckDBHook
@@ -52,28 +53,41 @@ with DAG(
     )
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    s3_1 = BashSensor(
+    s3_1 = FileSensor(
+        task_id="wait_routes_file",
+        filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt",
+        fs_conn_id="airflow_pg_conn",
+    )
+
+    s3_2 = FileSensor(
+        task_id="wait_stops_file",
+        filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/stops.txt",
+        fs_conn_id="airflow_pg_conn",
+    )
+
+    s3_3 = FileSensor(
+        task_id="wait_trips_file",
+        filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/trips.txt",
+        fs_conn_id="airflow_pg_conn",
+    )
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    t4_1 = BashOperator(
         task_id="check_routes_file",
         bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh routes",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
+        skip_on_exit_code=99,
     )
 
-    s3_2 = BashSensor(
+    t4_2 = BashOperator(
         task_id="check_stops_file",
         bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stops",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
+        skip_on_exit_code=99,
     )
 
-    s3_3 = BashSensor(
+    t4_3 = BashOperator(
         task_id="check_trips_file",
         bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh trips",
-        retry_exit_code=1,
-        poke_interval=10,
-        timeout=60,
+        skip_on_exit_code=99,
     )
 
     # s3_4 = BashSensor(
@@ -85,21 +99,21 @@ with DAG(
     # )
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    t4_1 = BashOperator(
+    t5_1 = BashOperator(
         task_id="copy_routes_file",
         bash_command=f"""
         cp {os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt {os.environ["WORK_DIR"]}/data/schedule/routes.csv
         """,
     )
 
-    t4_2 = BashOperator(
+    t5_2 = BashOperator(
         task_id="copy_stops_file",
         bash_command=f"""
         cp {os.environ["WORK_DIR"]}/data/schedule_temp/stops.txt {os.environ["WORK_DIR"]}/data/schedule/stops.csv
         """,
     )
 
-    t4_3 = BashOperator(
+    t5_3 = BashOperator(
         task_id="copy_trips_file",
         bash_command=f"""
         cp {os.environ["WORK_DIR"]}/data/schedule_temp/trips.txt {os.environ["WORK_DIR"]}/data/schedule/trips.csv
@@ -119,7 +133,7 @@ with DAG(
         retries=10,
         retry_delay=timedelta(seconds=10),
     )
-    def t5_1():
+    def t6_1():
         """
         (Re)create the dim_route table in DuckDB from the associated csv-file.
         """
@@ -141,7 +155,7 @@ with DAG(
         retries=10,
         retry_delay=timedelta(seconds=10),
     )
-    def t5_2():
+    def t6_2():
         """
         (Re)create the dim_stop table in DuckDB from the associated csv-file.
         """
@@ -163,7 +177,7 @@ with DAG(
         retries=10,
         retry_delay=timedelta(seconds=10),
     )
-    def t5_3():
+    def t6_3():
         """
         (Re)create the dim_trip table in DuckDB from the associated csv-file.
         """
@@ -180,7 +194,17 @@ with DAG(
         print(conn.sql("SELECT COUNT(*) FROM dim_trip").fetchone()[0])
         conn.close()
 
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    t7 = BashOperator(
+        task_id="remove_txt_files",
+        bash_command=f"""
+        cd {os.environ["WORK_DIR"]}/data/schedule_temp;
+        rm *.txt
+        """,
+        trigger_rule="all_done",
+    )
+
     t0 >> t1 >> t2
-    s3_1 >> t4_1 >> t5_1()
-    s3_2 >> t4_2 >> t5_2()
-    s3_3 >> t4_3 >> t5_3()
+    s3_1 >> t4_1 >> t5_1 >> t6_1() >> t7
+    s3_2 >> t4_2 >> t5_2 >> t6_2() >> t7
+    s3_3 >> t4_3 >> t5_3 >> t6_3() >> t7
