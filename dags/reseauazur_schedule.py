@@ -57,18 +57,21 @@ with DAG(
         task_id="wait_routes_file",
         filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt",
         fs_conn_id="airflow_pg_conn",
+        poke_interval=2,
     )
 
     s3_2 = FileSensor(
         task_id="wait_stops_file",
         filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/stops.txt",
         fs_conn_id="airflow_pg_conn",
+        poke_interval=2,
     )
 
     s3_3 = FileSensor(
         task_id="wait_trips_file",
         filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/trips.txt",
         fs_conn_id="airflow_pg_conn",
+        poke_interval=2,
     )
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -142,9 +145,16 @@ with DAG(
 
         # execute a simple query
         sql_query = f"""
-            CREATE TABLE IF NOT EXISTS dim_route AS
-            SELECT route_id, route_type, route_short_name, route_long_name, route_color
-            FROM '{os.environ["WORK_DIR"]}/data/schedule/routes.csv'
+            DROP TABLE IF EXISTS dim_route;
+            CREATE TABLE dim_route AS
+            SELECT
+                route_id AS id,
+                route_type AS type,
+                route_short_name AS short_name,
+                route_long_name AS long_name,
+                route_color AS color
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/routes.csv';
+            ALTER TABLE dim_route ADD PRIMARY KEY (id)
             """
         conn.execute(sql_query)
         print(conn.sql("SELECT COUNT(*) FROM dim_route").fetchone()[0])
@@ -164,9 +174,18 @@ with DAG(
 
         # execute a simple query
         sql_query = f"""
-            CREATE TABLE IF NOT EXISTS dim_stop AS
-            SELECT stop_id, parent_station, stop_name, stop_lat, stop_lon, location_type
+            DROP TABLE IF EXISTS dim_stop;
+            CREATE TABLE dim_stop AS
+            SELECT
+                stop_id AS id,
+                parent_station,
+                stop_name AS name,
+                stop_lat AS lat,
+                stop_lon AS lon,
+                location_type
             FROM '{os.environ["WORK_DIR"]}/data/schedule/stops.csv'
+            WHERE location_type IN (0,1);
+            ALTER TABLE dim_stop ADD PRIMARY KEY (id);
             """
         conn.execute(sql_query)
         print(conn.sql("SELECT COUNT(*) FROM dim_stop").fetchone()[0])
@@ -186,9 +205,15 @@ with DAG(
 
         # execute a simple query
         sql_query = f"""
-            CREATE TABLE IF NOT EXISTS dim_trip AS
-            SELECT trip_id, trip_headsign, trip_short_name, direction_id
-            FROM '{os.environ["WORK_DIR"]}/data/schedule/trips.csv'
+            DROP TABLE IF EXISTS dim_trip;
+            CREATE TABLE dim_trip AS
+            SELECT
+                trip_id AS id,
+                trip_headsign AS headsign,
+                trip_short_name AS short_name,
+                direction_id
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/trips.csv';
+            ALTER TABLE dim_trip ADD PRIMARY KEY (id)
             """
         conn.execute(sql_query)
         print(conn.sql("SELECT COUNT(*) FROM dim_trip").fetchone()[0])
