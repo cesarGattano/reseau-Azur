@@ -33,7 +33,7 @@ with DAG(
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     t0 = EmptyOperator(task_id="starting")
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # Download- - - - - - - - - - - - - - - - - - - - - - - -
     t1 = BashOperator(
         task_id="collect_schedule_data_file",
         bash_command=f"""
@@ -42,7 +42,7 @@ with DAG(
         """,
     )
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # Unzip - - - - - - - - - - - - - - - - - - - - - - - - -
     t2 = BashOperator(
         task_id="unzip_schedule_data_file",
         bash_command=f"""
@@ -52,26 +52,36 @@ with DAG(
         """,
     )
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # Wait for files- - - - - - - - - - - - - - - - - - - - -
     s3_1 = FileSensor(
         task_id="wait_routes_file",
         filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/routes.txt",
         fs_conn_id="airflow_pg_conn",
+        poke_interval=2,
     )
 
     s3_2 = FileSensor(
         task_id="wait_stops_file",
         filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/stops.txt",
         fs_conn_id="airflow_pg_conn",
+        poke_interval=2,
     )
 
     s3_3 = FileSensor(
         task_id="wait_trips_file",
         filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/trips.txt",
         fs_conn_id="airflow_pg_conn",
+        poke_interval=2,
     )
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    s3_4 = FileSensor(
+        task_id="wait_stop_times_file",
+        filepath=f"{os.environ["WORK_DIR"]}/data/schedule_temp/stop_times.txt",
+        fs_conn_id="airflow_pg_conn",
+        poke_interval=2,
+    )
+
+    # Check files - - - - - - - - - - - - - - - - - - - - - -
     t4_1 = BashOperator(
         task_id="check_routes_file",
         bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh routes",
@@ -90,13 +100,11 @@ with DAG(
         skip_on_exit_code=99,
     )
 
-    # s3_4 = BashSensor(
-    #     task_id="check_stop_times_file",
-    #     bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times",
-    #     retry_exit_code=1,
-    #     poke_interval=10,
-    #     timeout=60,
-    # )
+    t4_4 = BashOperator(
+        task_id="check_stop_times_file",
+        bash_command=f"{os.environ["WORK_DIR"]}/dags/scripts/check_temp_file_and_db_access.sh stop_times",
+        skip_on_exit_code=99,
+    )
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     t5_1 = BashOperator(
@@ -120,14 +128,14 @@ with DAG(
         """,
     )
 
-    # t4_4 = BashOperator(
-    #     task_id="copy_stop_times_file",
-    #     bash_command=f"""
-    #     cp {os.environ["WORK_DIR"]}/data/schedule_temp/stop_times.txt {os.environ["WORK_DIR"]}/data/schedule/stop_times.csv
-    #     """,
-    # )
+    t5_4 = BashOperator(
+        task_id="copy_stop_times_file",
+        bash_command=f"""
+        cp {os.environ["WORK_DIR"]}/data/schedule_temp/stop_times.txt {os.environ["WORK_DIR"]}/data/schedule/stop_times.csv
+        """,
+    )
 
-    # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    # Create tables - - - - - - - - - - - - - - - - - - - - -
     @task(
         task_id="create_dim_route_table",
         retries=10,
@@ -142,9 +150,16 @@ with DAG(
 
         # execute a simple query
         sql_query = f"""
-            CREATE TABLE IF NOT EXISTS dim_route AS
-            SELECT route_id, route_type, route_short_name, route_long_name, route_color
-            FROM '{os.environ["WORK_DIR"]}/data/schedule/routes.csv'
+            DROP TABLE IF EXISTS dim_route;
+            CREATE TABLE dim_route AS
+            SELECT
+                route_id AS id,
+                route_type AS type,
+                route_short_name AS short_name,
+                route_long_name AS long_name,
+                route_color AS color
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/routes.csv';
+            ALTER TABLE dim_route ADD PRIMARY KEY (id)
             """
         conn.execute(sql_query)
         print(conn.sql("SELECT COUNT(*) FROM dim_route").fetchone()[0])
@@ -164,9 +179,18 @@ with DAG(
 
         # execute a simple query
         sql_query = f"""
-            CREATE TABLE IF NOT EXISTS dim_stop AS
-            SELECT stop_id, parent_station, stop_name, stop_lat, stop_lon, location_type
+            DROP TABLE IF EXISTS dim_stop;
+            CREATE TABLE dim_stop AS
+            SELECT
+                stop_id AS id,
+                parent_station,
+                stop_name AS name,
+                stop_lat AS lat,
+                stop_lon AS lon,
+                location_type
             FROM '{os.environ["WORK_DIR"]}/data/schedule/stops.csv'
+            WHERE location_type IN (0,1);
+            ALTER TABLE dim_stop ADD PRIMARY KEY (id);
             """
         conn.execute(sql_query)
         print(conn.sql("SELECT COUNT(*) FROM dim_stop").fetchone()[0])
@@ -186,12 +210,44 @@ with DAG(
 
         # execute a simple query
         sql_query = f"""
-            CREATE TABLE IF NOT EXISTS dim_trip AS
-            SELECT trip_id, trip_headsign, trip_short_name, direction_id
-            FROM '{os.environ["WORK_DIR"]}/data/schedule/trips.csv'
+            DROP TABLE IF EXISTS dim_trip;
+            CREATE TABLE dim_trip AS
+            SELECT
+                trip_id AS id,
+                trip_headsign AS headsign,
+                trip_short_name AS short_name,
+                direction_id
+            FROM '{os.environ["WORK_DIR"]}/data/schedule/trips.csv';
+            ALTER TABLE dim_trip ADD PRIMARY KEY (id)
             """
         conn.execute(sql_query)
         print(conn.sql("SELECT COUNT(*) FROM dim_trip").fetchone()[0])
+        conn.close()
+
+    @task(
+        task_id="create_dim_time_table"
+    )
+    def t6_4():
+        """
+        Create the dim_time table in DuckDB.
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # execute a simple query
+        sql_query = """
+            CREATE TABLE IF NOT EXISTS dim_time (
+                event_ts datetime PRIMARY KEY NOT NULL,
+                date date NOT NULL,
+                year int NOT NULL,
+                month int NOT NULL,
+                week int NOT NULL,
+                hour int NOT NULL,
+                minute int NOT NULL
+            )
+            """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM dim_time").fetchone()[0])
         conn.close()
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -208,3 +264,5 @@ with DAG(
     s3_1 >> t4_1 >> t5_1 >> t6_1() >> t7
     s3_2 >> t4_2 >> t5_2 >> t6_2() >> t7
     s3_3 >> t4_3 >> t5_3 >> t6_3() >> t7
+    s3_4 >> t4_4 >> t5_4 >> t7
+    t6_4() >> t7
