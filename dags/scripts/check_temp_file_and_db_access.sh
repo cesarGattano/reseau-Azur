@@ -36,8 +36,8 @@ then
         # Both files exist and are identical.
         # Return a code that will abort retry of the airflow sensor.
         echo "Files ${WORK_DIR}/data/schedule_temp/$filename.txt and ${WORK_DIR}/data/schedule/$filename.csv are identical."
-        echo "No upload to the database"
-        exit 2
+        echo "No upload to the database. Skip DAG branch."
+        exit 99
     fi
 fi
 
