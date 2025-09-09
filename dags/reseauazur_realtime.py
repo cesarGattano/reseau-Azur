@@ -113,9 +113,114 @@ def process_realtime_data():
             else:
                 raise AirflowException("Missing field vehicle")
 
+        vehicle_positions.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicule_positions.csv",
+            index=False,
+        )
         return vehicle_positions
 
-    vehicle_positions = download_vehicle_positions()
+    @task(task_id="download_trip_updates", retries=0)
+    def download_trip_updates() -> pd.DataFrame:
+        """
+        #### Download the trip updates
+        ...
+        """
+
+        feed = gtfs_realtime_pb2.FeedMessage()
+        response = requests.get(os.environ["GTFS_REALTIME_TU_URL"])
+        feed.ParseFromString(response.content)
+        print(feed.header)
+
+        trip_updates = pd.DataFrame(
+            columns=[
+                "trip_id",
+                "route_id",
+                "stop_id",
+                "stop_sequence",
+                "arrival_time",
+                "departure_time",
+            ]
+        )
+
+        missing_arrival_time_count = 0
+        missing_departure_time_count = 0
+        for entity in feed.entity:
+            if entity.HasField("trip_update"):
+                if entity.trip_update.HasField("trip"):
+                    if entity.trip_update.trip.HasField("trip_id"):
+                        trip_id = entity.trip_update.trip.trip_id
+                    else:
+                        raise AirflowException("Missing field trip_update.trip.trip_id")
+                    if entity.trip_update.trip.HasField("route_id"):
+                        route_id = entity.trip_update.trip.route_id
+                    else:
+                        raise AirflowException(
+                            "Missing field trip_update.trip.route_id"
+                        )
+                else:
+                    raise AirflowException("Missing field trip_update.trip")
+
+                for stop_time_update in entity.trip_update.stop_time_update:
+                    if stop_time_update.HasField("stop_sequence"):
+                        stop_sequence = stop_time_update.stop_sequence
+                    else:
+                        raise AirflowException(
+                            "Missing field trip_update.stop_time_update.stop_sequence"
+                        )
+
+                    if stop_time_update.HasField("arrival"):
+                        if stop_time_update.arrival.HasField("time"):
+                            arrival_time = stop_time_update.arrival.time
+                        else:
+                            missing_arrival_time_count += 1
+                            arrival_time = None
+                    else:
+                        raise AirflowException(
+                            "Missing field trip_update.stop_time_update.arrival"
+                        )
+
+                    if stop_time_update.HasField("departure"):
+                        if stop_time_update.departure.HasField("time"):
+                            departure_time = stop_time_update.departure.time
+                        else:
+                            missing_departure_time_count += 1
+                            departure_time = None
+                    else:
+                        raise AirflowException(
+                            "Missing field trip_update.stop_time_update.departure"
+                        )
+
+                    if stop_time_update.HasField("stop_id"):
+                        stop_id = stop_time_update.stop_id
+                    else:
+                        raise AirflowException(
+                            "Missing field trip_update.stop_time_update.stop_id"
+                        )
+
+                    trip_updates.loc[
+                        entity.id + str(stop_time_update.stop_sequence)
+                    ] = pd.Series(
+                        {
+                            "trip_id": trip_id,
+                            "route_id": route_id,
+                            "stop_id": stop_id,
+                            "stop_sequence": stop_sequence,
+                            "arrival_time": arrival_time,
+                            "departure_time": departure_time,
+                        }
+                    )
+
+            else:
+                raise AirflowException("Missing field trip_update")
+
+        trip_updates.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/trip_updates.csv",
+            index=False,
+        )
+        return trip_updates
+
+    _ = download_vehicle_positions()
+    _ = download_trip_updates()
 
 
 process_realtime_data()
