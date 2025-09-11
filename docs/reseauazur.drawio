@@ -521,13 +521,13 @@
         <mxCell id="UEASHGHwx1nZdHQbV4XU-17" value="&lt;div&gt;Relancer plusieurs fois&lt;/div&gt;&lt;div&gt;(duckDB concurrent protection)&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="mdcTIBenqkIRLCnoOglZ-6" vertex="1">
           <mxGeometry x="1151" y="405" width="180" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="KeY53KE2L0WhJst4T6rQ-24" target="SSFrSN9uWahbW0WKBvHG-1">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="KeY53KE2L0WhJst4T6rQ-24" target="SSFrSN9uWahbW0WKBvHG-1" edge="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="960" y="68" as="sourcePoint" />
             <mxPoint x="1360" y="68" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-1" target="UEASHGHwx1nZdHQbV4XU-5">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-1" target="UEASHGHwx1nZdHQbV4XU-5" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="780" y="40" />
@@ -535,10 +535,10 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-1" value="Différent de data/&lt;br&gt;schedule/routes.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-6">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-1" value="Différent de data/&lt;br&gt;schedule/routes.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" parent="mdcTIBenqkIRLCnoOglZ-6" vertex="1">
           <mxGeometry x="680" y="52.5" width="200" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-3" target="UEASHGHwx1nZdHQbV4XU-5">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-3" target="UEASHGHwx1nZdHQbV4XU-5" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="780" y="230" />
@@ -547,16 +547,16 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-3" value="Différent de data/&lt;br&gt;schedule/stops.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-6">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-3" value="Différent de data/&lt;br&gt;schedule/stops.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" parent="mdcTIBenqkIRLCnoOglZ-6" vertex="1">
           <mxGeometry x="680" y="237.5" width="200" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="9fs8H24bjHpdNSEqDaRC-2" target="SSFrSN9uWahbW0WKBvHG-3">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="9fs8H24bjHpdNSEqDaRC-2" target="SSFrSN9uWahbW0WKBvHG-3" edge="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="960" y="253" as="sourcePoint" />
             <mxPoint x="1360" y="253" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-5" target="UEASHGHwx1nZdHQbV4XU-5">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-5" target="UEASHGHwx1nZdHQbV4XU-5" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="780" y="480" />
@@ -565,16 +565,16 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-5" value="Différent de data/&lt;br&gt;schedule/trips.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-6">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-5" value="Différent de data/&lt;br&gt;schedule/trips.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" parent="mdcTIBenqkIRLCnoOglZ-6" vertex="1">
           <mxGeometry x="680" y="490" width="200" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="9fs8H24bjHpdNSEqDaRC-5" target="SSFrSN9uWahbW0WKBvHG-5">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="9fs8H24bjHpdNSEqDaRC-5" target="SSFrSN9uWahbW0WKBvHG-5" edge="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="960" y="505" as="sourcePoint" />
             <mxPoint x="1360" y="505" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-7" target="UEASHGHwx1nZdHQbV4XU-5">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-7" target="UEASHGHwx1nZdHQbV4XU-5" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="780" y="670" />
@@ -583,16 +583,16 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-7" value="Différent de data/&lt;br&gt;schedule/stop_times.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-6">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-7" value="Différent de data/&lt;br&gt;schedule/stop_times.csv ?" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" parent="mdcTIBenqkIRLCnoOglZ-6" vertex="1">
           <mxGeometry x="680" y="680" width="200" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="D88ilNAdzFjwYtPaMrln-20" target="SSFrSN9uWahbW0WKBvHG-7">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="D88ilNAdzFjwYtPaMrln-20" target="SSFrSN9uWahbW0WKBvHG-7" edge="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="960" y="695" as="sourcePoint" />
             <mxPoint x="1360" y="695" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-14" target="UEASHGHwx1nZdHQbV4XU-5">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="SSFrSN9uWahbW0WKBvHG-14" target="UEASHGHwx1nZdHQbV4XU-5" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1400" y="895" />
@@ -600,10 +600,10 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-14" value="Création dim_time" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-6">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-14" value="Création dim_time" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;" parent="mdcTIBenqkIRLCnoOglZ-6" vertex="1">
           <mxGeometry x="1141" y="870" width="200" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="SSFrSN9uWahbW0WKBvHG-15" value="Table dim_time dans duckDB" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;glass=0;strokeWidth=1;shadow=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-6">
+        <mxCell id="SSFrSN9uWahbW0WKBvHG-15" value="Table dim_time dans duckDB" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;glass=0;strokeWidth=1;shadow=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="mdcTIBenqkIRLCnoOglZ-6" vertex="1">
           <mxGeometry x="1144" y="930" width="180" height="40" as="geometry" />
         </mxCell>
         <mxCell id="mdcTIBenqkIRLCnoOglZ-9" value="Horizontal Container" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;swimlaneFillColor=default;" parent="1" vertex="1">
