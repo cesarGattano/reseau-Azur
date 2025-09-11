@@ -224,9 +224,7 @@ with DAG(
         print(conn.sql("SELECT COUNT(*) FROM dim_trip").fetchone()[0])
         conn.close()
 
-    @task(
-        task_id="create_dim_time_table"
-    )
+    @task(task_id="create_dim_time_table")
     def t6_4():
         """
         Create the dim_time table in DuckDB.
@@ -237,13 +235,15 @@ with DAG(
         # execute a simple query
         sql_query = """
             CREATE TABLE IF NOT EXISTS dim_time (
-                event_ts datetime PRIMARY KEY NOT NULL,
+                event_ts TIMESTAMP WITH TIME ZONE NOT NULL,
                 date date NOT NULL,
                 year int NOT NULL,
                 month int NOT NULL,
                 week int NOT NULL,
+                time time NOT NULL,
                 hour int NOT NULL,
-                minute int NOT NULL
+                minute int NOT NULL,
+                PRIMARY KEY (event_ts)
             )
             """
         conn.execute(sql_query)
