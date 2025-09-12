@@ -37,7 +37,6 @@ def compute_time_offset(row, key_scheduled: str, key_real: str) -> int | None:
         return None
 
 
-
 def derive_on_time_status(row, key_time_offset: str) -> int | None:
     if not pd.isnull(row[key_time_offset]):
         if row[key_time_offset] <= 120:
@@ -61,9 +60,6 @@ def get_service_date() -> tuple[int, int, int]:
     """
     now_datetime = pendulum.now()
 
-    # TODO: REMOVE: only for current test
-    now_datetime = now_datetime.subtract(days=1)
-
     # Change of service date at 3:00
     if 0 <= now_datetime.hour <= 3:
         service_datetime = now_datetime.subtract(days=1)
@@ -71,3 +67,37 @@ def get_service_date() -> tuple[int, int, int]:
         service_datetime = now_datetime
 
     return (service_datetime.year, service_datetime.month, service_datetime.day)
+
+
+def get_insert_vehicle_ts_in_dim_time_query(row) -> str:
+    ts = pendulum.parse(row["vehicle_ts"])
+    return f"""
+        INSERT OR IGNORE INTO dim_time (
+            event_ts,
+            date,
+            year,
+            month,
+            week,
+            time,
+            hour,
+            minute
+        )
+        VALUES (
+            '{ts}',
+            '{ts.to_date_string()}',
+            {ts.year},
+            {ts.month},
+            {ts.week_of_year},
+            '{ts.to_time_string()}',
+            {ts.hour},
+            {ts.minute}
+        );
+    """
+
+
+def route_id_match_in_dim_route(row, conn) -> bool:
+    sql_query = f"""
+        SELECT COUNT(*) FROM dim_route WHERE id == '{row["route_id"]}';
+    """
+    n_match = conn.sql(sql_query).fetchone()[0]
+    return n_match > 0
