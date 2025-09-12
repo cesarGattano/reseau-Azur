@@ -19,7 +19,7 @@ with DAG(
     Download the gtfs schedule data of the Reseau Azur Transport at Nice,
     clean it and store it in the duckDB database.
     """,
-    schedule="0 12 * * *",
+    schedule="0 7 * * *",
     start_date=pendulum.datetime(2025, 9, 5),
     end_date=pendulum.datetime(2025, 9, 30),
     default_args={"retries": 1},
@@ -162,6 +162,24 @@ with DAG(
             ALTER TABLE dim_route ADD PRIMARY KEY (id)
             """
         conn.execute(sql_query)
+
+        sql_query = """
+            INSERT INTO dim_route (
+                id,
+                type,
+                short_name,
+                long_name,
+                color
+            ) VALUES (
+                'Unknown',
+                -1,
+                'Unknown',
+                'Unknown',
+                '000000'
+            );
+            """
+        conn.execute(sql_query)
+
         print(conn.sql("SELECT COUNT(*) FROM dim_route").fetchone()[0])
         conn.close()
 
