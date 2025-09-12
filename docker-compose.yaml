@@ -81,6 +81,8 @@ x-airflow-common:
     WORK_DIR: ${WORK_DIR:-/opt/airflow}
     AIRFLOW_CONFIG: '${WORK_DIR:-/opt/airflow}/config/airflow.cfg'
     GTFS_SCHEDULE_URL: ${GTFS_SCHEDULE_URL}
+    GTFS_REALTIME_VP_URL: ${GTFS_REALTIME_VP_URL}
+    GTFS_REALTIME_TU_URL: ${GTFS_REALTIME_TU_URL}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:${WORK_DIR:-/opt/airflow}/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:${WORK_DIR:-/opt/airflow}/logs
