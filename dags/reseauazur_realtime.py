@@ -98,11 +98,6 @@ def process_realtime_data():
                 else:
                     raise AirflowException("Missing field vehicle.timestamp")
 
-                if entity.vehicle.HasField("stop_id"):
-                    stop_id = entity.vehicle.stop_id
-                else:
-                    raise AirflowException("Missing field vehicle.stop_id")
-
                 if entity.vehicle.HasField("vehicle"):
                     if entity.vehicle.vehicle.HasField("id"):
                         vehicle_id = entity.vehicle.vehicle.id
@@ -110,6 +105,15 @@ def process_realtime_data():
                         raise AirflowException("Missing field vehicle.vehicle.id")
                 else:
                     raise AirflowException("Missing field vehicle.vehicle")
+
+                if entity.vehicle.HasField("stop_id"):
+                    stop_id = entity.vehicle.stop_id
+                else:
+                    # TODO: why ? investigate...
+                    print("Missing field vehicle.stop_id")
+                    print("Drop entry with vehicle_id: ", vehicle_id)
+                    continue
+                    # raise AirflowException("Missing field vehicle.stop_id")
 
                 vehicle_positions.loc[entity.id] = pd.Series(
                     {
@@ -149,12 +153,32 @@ def process_realtime_data():
         sql_query = f"""
             SELECT
                 vp.vehicle_id AS vehicle_id,
+                vp.trip_id AS trip_id,
+                vp.stop_id AS stop_id,
+                st.stop_sequence AS stop_sequence
+            FROM '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions.csv' AS vp
+            INNER JOIN
+                read_csv('{os.environ["WORK_DIR"]}/data/schedule/stop_times.csv') AS st
+            ON
+                vp.trip_id = st.trip_id
+                AND vp.stop_id = st.stop_id;
+        """
+        vehicle_positions = conn.execute(sql_query).df()
+
+        vehicle_positions.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_next_stops.csv",
+            index=False,
+        )
+
+        sql_query = f"""
+            SELECT
+                vp.vehicle_id AS vehicle_id,
                 vp.timestamp AS vehicle_ts,
                 vp.longitude AS longitude,
                 vp.latitude AS latitude,
                 vp.trip_id AS trip_id,
                 vp.route_id AS route_id,
-                vp.stop_id AS stop_id,
+                st.stop_id AS stop_id,
                 st.stop_sequence AS stop_sequence,
                 st.arrival_time AS scheduled_arrival_time,
                 st.departure_time AS scheduled_departure_time
@@ -165,13 +189,14 @@ def process_realtime_data():
                 ) AS st
             ON
                 vp.trip_id = st.trip_id
-                AND vp.stop_id = st.stop_id;
+            INNER JOIN '{os.environ["WORK_DIR"]}/data/realtime/vehicle_next_stops.csv' AS ns
+            ON
+                vp.vehicle_id = ns.vehicle_id
         """
-
-        trip_updates = conn.execute(sql_query).df()
+        vehicle_positions = conn.execute(sql_query).df()
         conn.close()
 
-        trip_updates.to_csv(
+        vehicle_positions.to_csv(
             f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_compl.csv",
             index=False,
         )
