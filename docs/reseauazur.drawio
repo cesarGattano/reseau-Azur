@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0" version="28.2.0" pages="3">
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0" version="28.2.1" pages="3">
   <diagram id="C5RBs43oDa-KdzZeNtuy" name="Données_pertinentes">
     <mxGraphModel dx="4929" dy="1076" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
@@ -335,12 +335,12 @@
     </mxGraphModel>
   </diagram>
   <diagram id="19E5HAmO1gW-TnAR1WGc" name="orchestration">
-    <mxGraphModel dx="1378" dy="2084" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="2297" dy="2694" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="mdcTIBenqkIRLCnoOglZ-6" value="DAG: Collect and store static data" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;swimlaneFillColor=default;" parent="1" vertex="1">
-          <mxGeometry x="330" y="-150" width="2070" height="1000" as="geometry" />
+          <mxGeometry x="330" y="-150" width="1970" height="1000" as="geometry" />
         </mxCell>
         <mxCell id="KeY53KE2L0WhJst4T6rQ-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-6" source="KeY53KE2L0WhJst4T6rQ-15" target="KeY53KE2L0WhJst4T6rQ-16" edge="1">
           <mxGeometry relative="1" as="geometry" />
@@ -613,13 +613,13 @@
           <mxGeometry x="1144" y="930" width="180" height="40" as="geometry" />
         </mxCell>
         <mxCell id="mdcTIBenqkIRLCnoOglZ-9" value="Horizontal Container" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;swimlaneFillColor=default;" parent="1" vertex="1">
-          <mxGeometry x="330" y="870" width="2070" height="460" as="geometry" />
+          <mxGeometry x="330" y="870" width="1970" height="460" as="geometry" />
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="D88ilNAdzFjwYtPaMrln-7" target="mAn2ImI5piLj6lzec0jX-6">
+        <mxCell id="mAn2ImI5piLj6lzec0jX-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="-z3feDFHpUkBF4KGMA3P-5" target="mAn2ImI5piLj6lzec0jX-6" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="780" y="270" />
-              <mxPoint x="780" y="140" />
+              <mxPoint x="780" y="160" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -638,43 +638,31 @@
         <mxCell id="gx5t86Bnnudl1JYuoNUw-8" value="Request the file&lt;br&gt;stop_times.txt&lt;div&gt;with trip_id, stop_id and stop_sequence&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
           <mxGeometry x="272" y="80" width="180" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="jY-p7G7ggsYsW0kFQMrp-1" value="Match via trip_id, route_id, stop_id.&lt;br&gt;What about stop_sequence ?" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
-          <mxGeometry x="821" y="175" width="180" height="70" as="geometry" />
+        <mxCell id="jY-p7G7ggsYsW0kFQMrp-1" value="&lt;div&gt;Match via trip_id, stop_id,&amp;nbsp;stop_sequence.&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
+          <mxGeometry x="821" y="195" width="180" height="70" as="geometry" />
         </mxCell>
         <mxCell id="vXjJYPh54qcyy3_7bQ1w-1" value="Check problems known on data.gouv.fr" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
           <mxGeometry x="272" y="150" width="180" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="vXjJYPh54qcyy3_7bQ1w-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="vXjJYPh54qcyy3_7bQ1w-2" target="vXjJYPh54qcyy3_7bQ1w-6" edge="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="vXjJYPh54qcyy3_7bQ1w-2" value="Mise en base des&lt;br&gt;positions véhicules&lt;br&gt;temps planifiés par stop&lt;br&gt;&lt;div&gt;temps réels par stop&lt;/div&gt;&lt;div&gt;retars et on_time status&lt;/div&gt;" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
-          <mxGeometry x="1338" y="150" width="200" height="80" as="geometry" />
-        </mxCell>
         <mxCell id="vXjJYPh54qcyy3_7bQ1w-3" value="Table vehicle_next_stop_times&amp;nbsp; dans duckDB" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;glass=0;strokeWidth=1;shadow=0;fillColor=#fff2cc;strokeColor=#d6b656;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
-          <mxGeometry x="1338" y="245" width="180" height="40" as="geometry" />
+          <mxGeometry x="1280" y="200" width="180" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="vXjJYPh54qcyy3_7bQ1w-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="mAn2ImI5piLj6lzec0jX-6" target="vXjJYPh54qcyy3_7bQ1w-5" edge="1">
+        <mxCell id="vXjJYPh54qcyy3_7bQ1w-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="-z3feDFHpUkBF4KGMA3P-9" edge="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1078" y="190" as="sourcePoint" />
             <Array as="points">
               <mxPoint x="1218" y="140" />
             </Array>
+            <mxPoint x="1218" y="165" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="vXjJYPh54qcyy3_7bQ1w-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="vXjJYPh54qcyy3_7bQ1w-5" target="vXjJYPh54qcyy3_7bQ1w-2" edge="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="mdcTIBenqkIRLCnoOglZ-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="-z3feDFHpUkBF4KGMA3P-14" target="mdcTIBenqkIRLCnoOglZ-10" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1758" y="190" as="sourcePoint" />
+          </mxGeometry>
         </mxCell>
-        <mxCell id="vXjJYPh54qcyy3_7bQ1w-5" value="Lock duckDB database" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
-          <mxGeometry x="1118" y="165" width="200" height="50" as="geometry" />
-        </mxCell>
-        <mxCell id="mdcTIBenqkIRLCnoOglZ-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="vXjJYPh54qcyy3_7bQ1w-6" target="mdcTIBenqkIRLCnoOglZ-10" edge="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="vXjJYPh54qcyy3_7bQ1w-6" value="Unlock duckDB database" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
-          <mxGeometry x="1558" y="165" width="200" height="50" as="geometry" />
-        </mxCell>
-        <mxCell id="mdcTIBenqkIRLCnoOglZ-10" value="Summary report" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
-          <mxGeometry x="1810" y="165" width="200" height="50" as="geometry" />
+        <mxCell id="mdcTIBenqkIRLCnoOglZ-10" value="Summary report" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=none;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
+          <mxGeometry x="1740" y="135" width="200" height="50" as="geometry" />
         </mxCell>
         <mxCell id="mdcTIBenqkIRLCnoOglZ-12" value="Run every 15 min" style="html=1;whiteSpace=wrap;container=1;recursiveResize=0;collapsible=0;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
           <mxGeometry x="48" y="370" width="192" height="70" as="geometry" />
@@ -682,34 +670,94 @@
         <mxCell id="mdcTIBenqkIRLCnoOglZ-13" value="" style="triangle;html=1;whiteSpace=wrap;fillColor=#647687;fontColor=#ffffff;strokeColor=#314354;" parent="mdcTIBenqkIRLCnoOglZ-12" vertex="1">
           <mxGeometry x="20" y="20" width="20" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="mAn2ImI5piLj6lzec0jX-1" target="mAn2ImI5piLj6lzec0jX-3">
+        <mxCell id="mAn2ImI5piLj6lzec0jX-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="mAn2ImI5piLj6lzec0jX-1" target="mAn2ImI5piLj6lzec0jX-3" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-1" value="Extract planned times" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+        <mxCell id="mAn2ImI5piLj6lzec0jX-1" value="Extract planned times" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
           <mxGeometry x="276" y="25" width="200" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="D88ilNAdzFjwYtPaMrln-8" target="mAn2ImI5piLj6lzec0jX-1">
+        <mxCell id="mAn2ImI5piLj6lzec0jX-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="D88ilNAdzFjwYtPaMrln-8" target="mAn2ImI5piLj6lzec0jX-1" edge="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="578" y="920" as="sourcePoint" />
             <mxPoint x="906" y="1035" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="mAn2ImI5piLj6lzec0jX-3" target="mAn2ImI5piLj6lzec0jX-6">
+        <mxCell id="mAn2ImI5piLj6lzec0jX-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="mdcTIBenqkIRLCnoOglZ-9" source="mAn2ImI5piLj6lzec0jX-3" target="mAn2ImI5piLj6lzec0jX-6" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="780" y="50" />
-              <mxPoint x="780" y="140" />
+              <mxPoint x="780" y="160" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-3" value="Convert times&lt;br&gt;Compute delays" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+        <mxCell id="mAn2ImI5piLj6lzec0jX-3" value="Convert times&lt;br&gt;Compute delays" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
           <mxGeometry x="510" y="25" width="200" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-5" value="&lt;div&gt;24:00:00+ problem&lt;/div&gt;&lt;div&gt;Convert into datetime&lt;br&gt;Sepcify Europre/Paris&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+        <mxCell id="mAn2ImI5piLj6lzec0jX-5" value="&lt;div&gt;24:00:00+ problem&lt;/div&gt;&lt;div&gt;Convert into datetime&lt;br&gt;Sepcify Europre/Paris&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
           <mxGeometry x="510" y="80" width="180" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="mAn2ImI5piLj6lzec0jX-6" value="insert vehicle info&lt;br&gt;for each trip update" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
-          <mxGeometry x="820" y="115" width="200" height="50" as="geometry" />
+        <mxCell id="mAn2ImI5piLj6lzec0jX-6" value="&lt;div&gt;join vehicle_positions&lt;/div&gt;&lt;div&gt;with trip_updates&lt;/div&gt;" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" parent="mdcTIBenqkIRLCnoOglZ-9" vertex="1">
+          <mxGeometry x="821" y="135" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-1" value="Extract planned times" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="276" y="245" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="D88ilNAdzFjwYtPaMrln-7" target="-z3feDFHpUkBF4KGMA3P-1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+            <mxPoint x="578" y="1140" as="sourcePoint" />
+            <mxPoint x="1170" y="1010" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-3" value="Request the file&lt;br&gt;stop_times.txt&lt;div&gt;with trip_id, stop_id&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="276" y="300" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-4" value="Check problems known on data.gouv.fr" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="276" y="370" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-5" value="Convert times" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="510" y="245" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="-z3feDFHpUkBF4KGMA3P-1" target="-z3feDFHpUkBF4KGMA3P-5">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+            <mxPoint x="826" y="1140" as="sourcePoint" />
+            <mxPoint x="1190" y="1010" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-7" value="&lt;div&gt;Convert into datetime&lt;br&gt;Sepcify Europre/Paris&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="510" y="300" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-8" value="&lt;div&gt;Liste de vehicle_positions&lt;/div&gt;&lt;div&gt;sans trip_updates =&amp;gt; considéré comme suivant le planning&lt;/div&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="821" y="265" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="-z3feDFHpUkBF4KGMA3P-9" target="-z3feDFHpUkBF4KGMA3P-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-9" value="Création de la table des faits" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="1050" y="135" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="mAn2ImI5piLj6lzec0jX-6" target="-z3feDFHpUkBF4KGMA3P-9">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1355" y="1010" as="sourcePoint" />
+            <Array as="points" />
+            <mxPoint x="1568" y="1035" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-11" value="Table vehicle_next_stop_times&amp;nbsp; dans duckDB" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;glass=0;strokeWidth=1;shadow=0;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="1050" y="200" width="180" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="mdcTIBenqkIRLCnoOglZ-9" source="-z3feDFHpUkBF4KGMA3P-12" target="-z3feDFHpUkBF4KGMA3P-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-12" value="Mise en base des&lt;br&gt;vehicle_positions&amp;nbsp;&lt;br&gt;avec trip_updates" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="1280" y="135" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-14" value="Mise en base des&lt;br&gt;vehicle_positions&amp;nbsp;&lt;br&gt;sans trip_updates" style="shape=step;perimeter=stepPerimeter;fixedSize=1;points=[];whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="1518" y="135" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="-z3feDFHpUkBF4KGMA3P-16" value="Table vehicle_next_stop_times&amp;nbsp; dans duckDB" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;glass=0;strokeWidth=1;shadow=0;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="mdcTIBenqkIRLCnoOglZ-9">
+          <mxGeometry x="1518" y="200" width="180" height="40" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
