@@ -1,10 +1,22 @@
 import os
 import pendulum
+from datetime import timedelta
 import pandas as pd
 import requests
+from utils.utils import (
+    convert_timestamp_into_france_datetime,
+    convert_scheduled_time_into_france_datetime,
+    compute_time_offset,
+    derive_on_time_status,
+    get_service_date,
+    get_insert_vehicle_ts_in_dim_time_query,
+    route_id_match_in_dim_route,
+)
 
 from airflow.sdk import dag, task
 from airflow.exceptions import AirflowException
+from airflow.providers.standard.operators.empty import EmptyOperator
+from duckdb_provider.hooks.duckdb_hook import DuckDBHook
 from google.transit import gtfs_realtime_pb2
 from dotenv import load_dotenv
 
@@ -19,7 +31,7 @@ load_dotenv()
     and each of their incoming stops until terminus,
     and store them in the duckDB database.
     """,
-    schedule="0 12 * * *",
+    schedule="*/15 * * * *",
     start_date=pendulum.datetime(2025, 9, 5),
     end_date=pendulum.datetime(2025, 9, 30),
     default_args={"retries": 1},
@@ -37,7 +49,7 @@ def process_realtime_data():
     """
 
     @task(task_id="download_vehicle_positions", retries=0)
-    def download_vehicle_positions() -> pd.DataFrame:
+    def download_vehicle_positions():
         """
         #### Download the vehicle positions
         ...
@@ -114,10 +126,91 @@ def process_realtime_data():
                 raise AirflowException("Missing field vehicle")
 
         vehicle_positions.to_csv(
-            f"{os.environ["WORK_DIR"]}/data/realtime/vehicule_positions.csv",
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions.csv",
             index=False,
         )
-        return vehicle_positions
+
+    @task(
+        task_id="extract_vehicle_scheduled_stop_times",
+        retries=2,
+        retry_delay=timedelta(seconds=10),
+    )
+    def extract_vehicle_scheduled_stop_times():
+        """
+        #### Extract the scheduled stop times for each vehicule
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # TODO: INNER JOIN may exlcude some vehicles because
+        # their trip_id+stop_id do not find match in stop_times.txt
+        # Investigate...
+        sql_query = f"""
+            SELECT
+                vp.vehicle_id AS vehicle_id,
+                vp.timestamp AS vehicle_ts,
+                vp.longitude AS longitude,
+                vp.latitude AS latitude,
+                vp.trip_id AS trip_id,
+                vp.route_id AS route_id,
+                vp.stop_id AS stop_id,
+                st.stop_sequence AS stop_sequence,
+                st.arrival_time AS scheduled_arrival_time,
+                st.departure_time AS scheduled_departure_time
+            FROM '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions.csv' AS vp
+            INNER JOIN
+                read_csv('{os.environ["WORK_DIR"]}/data/schedule/stop_times.csv',
+                    types = {{'arrival_time': 'VARCHAR', 'departure_time': 'VARCHAR'}}
+                ) AS st
+            ON
+                vp.trip_id = st.trip_id
+                AND vp.stop_id = st.stop_id;
+        """
+
+        trip_updates = conn.execute(sql_query).df()
+        conn.close()
+
+        trip_updates.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_compl.csv",
+            index=False,
+        )
+
+    @task(task_id="convert_vehicle_times", retries=0)
+    def compute_vehicle_times():
+        """
+        #### Convert the times in the vehicle_positions
+        ...
+        """
+
+        service_year, service_month, service_day = get_service_date()
+
+        # Collect
+        vehicle_positions = pd.read_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_compl.csv",
+            keep_default_na=False,
+            dtype={"vehicle_ts": "Int64"},
+        )
+        # Convert
+        key = "vehicle_ts"
+        vehicle_positions["vehicle_ts"] = vehicle_positions.apply(
+            convert_timestamp_into_france_datetime, axis=1, key="vehicle_ts"
+        )
+        vehicle_positions["scheduled_arrival_time"] = vehicle_positions.apply(
+            convert_scheduled_time_into_france_datetime,
+            axis=1,
+            args=("scheduled_arrival_time", service_year, service_month, service_day),
+        )
+        vehicle_positions["scheduled_departure_time"] = vehicle_positions.apply(
+            convert_scheduled_time_into_france_datetime,
+            axis=1,
+            args=("scheduled_departure_time", service_year, service_month, service_day),
+        )
+        # Store
+        vehicle_positions.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_with_datetime.csv",
+            index=False,
+        )
 
     @task(task_id="download_trip_updates", retries=0)
     def download_trip_updates() -> pd.DataFrame:
@@ -217,10 +310,420 @@ def process_realtime_data():
             f"{os.environ["WORK_DIR"]}/data/realtime/trip_updates.csv",
             index=False,
         )
-        return trip_updates
 
-    _ = download_vehicle_positions()
-    _ = download_trip_updates()
+    @task(
+        task_id="extract_scheduled_stop_times",
+        retries=2,
+        retry_delay=timedelta(seconds=6),
+    )
+    def extract_scheduled_stop_times():
+        """
+        #### Extract the schedules stop times
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # TODO: check known errors from transport.data.gouv.fr
+        sql_query = f"""
+            SELECT
+                tu.trip_id AS trip_id,
+                tu.route_id AS route_id,
+                tu.stop_id AS stop_id,
+                tu.stop_sequence AS stop_sequence,
+                tu.arrival_time AS real_arrival_time,
+                tu.departure_time AS real_departure_time,
+                st.arrival_time AS scheduled_arrival_time,
+                st.departure_time AS scheduled_departure_time
+            FROM '{os.environ["WORK_DIR"]}/data/realtime/trip_updates.csv' AS tu
+            LEFT JOIN
+                read_csv('{os.environ["WORK_DIR"]}/data/schedule/stop_times.csv',
+                    types = {{'arrival_time': 'VARCHAR', 'departure_time': 'VARCHAR'}}
+                ) AS st
+            ON
+                tu.trip_id = st.trip_id
+                AND tu.stop_id = st.stop_id
+                AND tu.stop_sequence = st.stop_sequence;
+        """
+        trip_updates = conn.execute(sql_query).df()
+        conn.close()
+
+        trip_updates.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/trip_updates_compl.csv",
+            index=False,
+        )
+
+    @task(task_id="compute_realtime_delays", retries=0)
+    def compute_realtime_delays():
+        """
+        #### Compute the realtime delays for all stops
+        ...
+        """
+
+        service_year, service_month, service_day = get_service_date()
+
+        # Collect
+        trip_updates = pd.read_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/trip_updates_compl.csv",
+            keep_default_na=False,
+            dtype={"real_arrival_time": "Int64", "real_departure_time": "Int64"},
+        )
+        # Convert
+        trip_updates["real_arrival_time"] = trip_updates.apply(
+            convert_timestamp_into_france_datetime, axis=1, key="real_arrival_time"
+        )
+        trip_updates["real_departure_time"] = trip_updates.apply(
+            convert_timestamp_into_france_datetime, axis=1, key="real_departure_time"
+        )
+        trip_updates["scheduled_arrival_time"] = trip_updates.apply(
+            convert_scheduled_time_into_france_datetime,
+            axis=1,
+            args=("scheduled_arrival_time", service_year, service_month, service_day),
+        )
+        trip_updates["scheduled_departure_time"] = trip_updates.apply(
+            convert_scheduled_time_into_france_datetime,
+            axis=1,
+            args=("scheduled_departure_time", service_year, service_month, service_day),
+        )
+        # Append
+        trip_updates["arrival_time_offset"] = trip_updates.apply(
+            compute_time_offset,
+            axis=1,
+            key_scheduled="scheduled_arrival_time",
+            key_real="real_arrival_time",
+        )
+        trip_updates["departure_time_offset"] = trip_updates.apply(
+            compute_time_offset,
+            axis=1,
+            key_scheduled="scheduled_departure_time",
+            key_real="real_departure_time",
+        )
+        trip_updates["arrival_on_time_status"] = trip_updates.apply(
+            derive_on_time_status, axis=1, key_time_offset="arrival_time_offset"
+        )
+        trip_updates["departure_on_time_status"] = trip_updates.apply(
+            derive_on_time_status, axis=1, key_time_offset="departure_time_offset"
+        )
+        # Store
+        trip_updates.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/trip_updates_with_delays.csv",
+            index=False,
+        )
+
+    @task(task_id="join_trip_updates_and_vehicle_positions", retries=0)
+    def join_trip_updates_and_vehicle_positions():
+        """
+        #### Join the realtime data together
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        tot_vehicle_entries = conn.sql(
+            f"""
+            SELECT COUNT(*) FROM '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_with_datetime.csv'
+            """
+        ).fetchone()[0]
+
+        # TODO: check known errors from transport.data.gouv.fr
+        sql_query = f"""
+            SELECT
+                vp.vehicle_id AS vehicle_id,
+                vp.vehicle_ts AS vehicle_ts,
+                vp.trip_id AS trip_id,
+                vp.route_id AS route_id,
+                vp.stop_id AS stop_id,
+                vp.stop_sequence AS stop_sequence,
+                vp.longitude AS longitude,
+                vp.latitude AS latitude,
+                tu.real_arrival_time AS real_arrival_time,
+                tu.real_departure_time AS real_departure_time,
+                tu.scheduled_arrival_time AS scheduled_arrival_time,
+                tu.scheduled_departure_time AS scheduled_departure_time,
+                tu.arrival_time_offset AS arrival_time_offset,
+                tu.departure_time_offset AS departure_time_offset,
+                tu.arrival_on_time_status AS arrival_on_time_status,
+                tu.departure_on_time_status AS departure_on_time_status
+            FROM '{os.environ["WORK_DIR"]}/data/realtime/trip_updates_with_delays.csv' AS tu
+            INNER JOIN '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_with_datetime.csv' AS vp
+            ON tu.trip_id = vp.trip_id
+                AND tu.stop_id = vp.stop_id
+                AND tu.stop_sequence = vp.stop_sequence
+                AND tu.scheduled_arrival_time = vp.scheduled_arrival_time
+                AND tu.scheduled_departure_time = vp.scheduled_departure_time;
+        """
+        vehicle_positions_with_trip_updates = conn.execute(sql_query).df()
+
+        vehicle_positions_with_trip_updates.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_with_trip_updates.csv",
+            index=False,
+        )
+
+        n_vehicle_with_trip_updates = conn.sql(
+            f"""
+            SELECT COUNT(*) FROM '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_with_trip_updates.csv'
+            """
+        ).fetchone()[0]
+
+        # TODO: check known errors from transport.data.gouv.fr
+        sql_query = f"""
+        SELECT
+            vp.vehicle_id AS vehicle_id,
+            vp.vehicle_ts AS vehicle_ts,
+            vp.trip_id AS trip_id,
+            vp.route_id AS route_id,
+            vp.stop_id AS stop_id,
+            vp.stop_sequence AS stop_sequence,
+            vp.longitude AS longitude,
+            vp.latitude AS latitude,
+            vp.scheduled_arrival_time AS scheduled_arrival_time,
+            vp.scheduled_departure_time AS scheduled_departure_time
+        FROM '{os.environ["WORK_DIR"]}/data/realtime/trip_updates_with_delays.csv' AS tu
+        RIGHT JOIN '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_with_datetime.csv' AS vp
+        ON tu.trip_id = vp.trip_id
+            AND tu.stop_id = vp.stop_id
+            AND tu.stop_sequence = vp.stop_sequence
+        WHERE
+            tu.trip_id IS NULL
+            AND tu.stop_id IS NULL
+            AND tu.stop_sequence IS NULL;
+        """
+        vehicle_positions_without_trip_updates = conn.execute(sql_query).df()
+
+        vehicle_positions_without_trip_updates.to_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_without_trip_updates.csv",
+            index=False,
+        )
+
+        n_vehicle_without_trip_updates = conn.sql(
+            f"""
+            SELECT COUNT(*) FROM '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_without_trip_updates.csv'
+            """
+        ).fetchone()[0]
+
+        conn.close()
+
+        print("Total vehicle entries:    ", tot_vehicle_entries)
+        print("... with trip updates:    ", n_vehicle_with_trip_updates)
+        print("... without trip updates: ", n_vehicle_without_trip_updates)
+        print(
+            "Lost entries...:          ",
+            tot_vehicle_entries
+            - (n_vehicle_without_trip_updates + n_vehicle_with_trip_updates),
+        )
+
+    @task(task_id="create_table_vehicle_next_stop_times", retries=0)
+    def create_table_vehicle_next_stop_times():
+        """
+        #### Create the fact table
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        sql_query = """
+            CREATE SEQUENCE IF NOT EXISTS position_id START 1;
+        """
+        conn.execute(sql_query)
+
+        sql_query = """
+            CREATE TABLE IF NOT EXISTS vehicle_next_stop_times (
+                position_id INTEGER NOT NULL DEFAULT nextval('position_id'),
+                vehicle_ts TIMESTAMP WITH TIME ZONE NOT NULL REFERENCES dim_time(event_ts),
+                stop_id VARCHAR NOT NULL REFERENCES dim_stop(id),
+                trip_id VARCHAR NOT NULL REFERENCES dim_trip(id),
+                route_id VARCHAR NOT NULL REFERENCES dim_route(id),
+                stop_sequence INTEGER NOT NULL,
+                vehicle_id VARCHAR NOT NULL,
+                scheduled_arrival_time TIMESTAMP WITH TIME ZONE NOT NULL,
+                scheduled_departure_time TIMESTAMP WITH TIME ZONE NOT NULL,
+                real_arrival_time TIMESTAMP WITH TIME ZONE,
+                real_departure_time TIMESTAMP WITH TIME ZONE,
+                arrival_time_offset INTEGER,
+                departure_time_offset INTEGER,
+                arrival_on_time_status INTEGER NOT NULL,
+                departure_on_time_status INTEGER NOT NULL,
+                latitude DOUBLE NOT NULL,
+                longitude DOUBLE NOT NULL,
+                PRIMARY KEY (position_id)
+            );
+        """
+        conn.execute(sql_query)
+        print(conn.sql("SELECT COUNT(*) FROM vehicle_next_stop_times").fetchone()[0])
+        conn.close()
+
+    @task(task_id="store_vehicle_positions_with_trip_updates", retries=0)
+    def store_vehicle_positions_with_trip_updates():
+        """
+        #### Store vehicle positions with a trip updates
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # Collect
+        vehicule_positions = pd.read_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_with_trip_updates.csv",
+            keep_default_na=False,
+        )
+
+        for _, row in vehicule_positions.iterrows():
+
+            # Insert vehicle timestamp in dim_time if not exist
+            sql_query = get_insert_vehicle_ts_in_dim_time_query(row)
+            conn.execute(sql_query)
+
+            # Known error from data.gouv.fr:
+            # Check if roue_id is present in gtfs schedule file routes.txt
+            if not route_id_match_in_dim_route(row, conn):
+                row["route_id"] = "Unknown"
+
+            # Insert data into table vehicle_next_stop_times
+            sql_query = "INSERT OR IGNORE INTO vehicle_next_stop_times (\n"
+            sql_query += "    vehicle_ts,\n"
+            sql_query += "    stop_id,\n"
+            sql_query += "    trip_id,\n"
+            sql_query += "    route_id,\n"
+            sql_query += "    stop_sequence,\n"
+            sql_query += "    vehicle_id,\n"
+            sql_query += "    scheduled_arrival_time,\n"
+            sql_query += "    scheduled_departure_time,\n"
+            if row["real_arrival_time"]:
+                sql_query += "    real_arrival_time,\n"
+            if row["real_departure_time"]:
+                sql_query += "    real_departure_time,\n"
+            if row["arrival_time_offset"]:
+                sql_query += "    arrival_time_offset,\n"
+            if row["departure_time_offset"]:
+                sql_query += "    departure_time_offset,\n"
+            sql_query += "    arrival_on_time_status,\n"
+            sql_query += "    departure_on_time_status,\n"
+            sql_query += "    latitude,\n"
+            sql_query += "    longitude\n"
+            sql_query += ") VALUES (\n"
+            sql_query += f"    '{row["vehicle_ts"]}',\n"
+            sql_query += f"    '{row["stop_id"]}',\n"
+            sql_query += f"    '{row["trip_id"]}',\n"
+            sql_query += f"    '{row["route_id"]}',\n"
+            sql_query += f"    {row["stop_sequence"]},\n"
+            sql_query += f"    '{row["vehicle_id"]}',\n"
+            sql_query += f"    '{row["scheduled_arrival_time"]}',\n"
+            sql_query += f"    '{row["scheduled_departure_time"]}',\n"
+            if row["real_arrival_time"]:
+                sql_query += f"    '{row["real_arrival_time"]}',\n"
+            if row["real_departure_time"]:
+                sql_query += f"    '{row["real_departure_time"]}',\n"
+            if row["arrival_time_offset"]:
+                sql_query += f"    {row["arrival_time_offset"]},\n"
+            if row["departure_time_offset"]:
+                sql_query += f"    {row["departure_time_offset"]},\n"
+            sql_query += f"    {row["arrival_on_time_status"]},\n"
+            sql_query += f"    {row["departure_on_time_status"]},\n"
+            sql_query += f"    {row["latitude"]},\n"
+            sql_query += f"    {row["longitude"]}\n"
+            sql_query += ");"
+            conn.execute(sql_query)
+
+        print(conn.sql("SELECT COUNT(*) FROM dim_time").fetchone()[0])
+        conn.close()
+
+    @task(task_id="store_vehicle_positions_without_trip_updates", retries=0)
+    def store_vehicle_positions_without_trip_updates():
+        """
+        #### Store vehicle positions without a trip updates
+        Consider them to be following the scheduled time
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # Collect
+        vehicule_positions = pd.read_csv(
+            f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_without_trip_updates.csv",
+            keep_default_na=False,
+        )
+
+        for _, row in vehicule_positions.iterrows():
+
+            # Insert vehicle timestamp in dim_time if not exist
+            sql_query = get_insert_vehicle_ts_in_dim_time_query(row)
+            conn.execute(sql_query)
+
+            # Known error from data.gouv.fr:
+            # Check if route_id is present in gtfs schedule file routes.txt
+            if not route_id_match_in_dim_route(row, conn):
+                row["route_id"] = "Unknown"
+
+            # Insert data into table vehicle_next_stop_times
+            sql_query = "INSERT OR IGNORE INTO vehicle_next_stop_times (\n"
+            sql_query += "    vehicle_ts,\n"
+            sql_query += "    stop_id,\n"
+            sql_query += "    trip_id,\n"
+            sql_query += "    route_id,\n"
+            sql_query += "    stop_sequence,\n"
+            sql_query += "    vehicle_id,\n"
+            sql_query += "    scheduled_arrival_time,\n"
+            sql_query += "    scheduled_departure_time,\n"
+            sql_query += "    real_arrival_time,\n"
+            sql_query += "    real_departure_time,\n"
+            sql_query += "    arrival_time_offset,\n"
+            sql_query += "    departure_time_offset,\n"
+            sql_query += "    arrival_on_time_status,\n"
+            sql_query += "    departure_on_time_status,\n"
+            sql_query += "    latitude,\n"
+            sql_query += "    longitude\n"
+            sql_query += ") VALUES (\n"
+            sql_query += f"    '{row["vehicle_ts"]}',\n"
+            sql_query += f"    '{row["stop_id"]}',\n"
+            sql_query += f"    '{row["trip_id"]}',\n"
+            sql_query += f"    '{row["route_id"]}',\n"
+            sql_query += f"    {row["stop_sequence"]},\n"
+            sql_query += f"    '{row["vehicle_id"]}',\n"
+            sql_query += f"    '{row["scheduled_arrival_time"]}',\n"
+            sql_query += f"    '{row["scheduled_departure_time"]}',\n"
+            sql_query += f"    '{row["scheduled_arrival_time"]}',\n"
+            sql_query += f"    '{row["scheduled_departure_time"]}',\n"
+            sql_query += "    0,\n"
+            sql_query += "    0,\n"
+            sql_query += "    0,\n"
+            sql_query += "    0,\n"
+            sql_query += f"    {row["latitude"]},\n"
+            sql_query += f"    {row["longitude"]}\n"
+            sql_query += ");"
+            print(sql_query)
+            conn.execute(sql_query)
+
+        print(conn.sql("SELECT COUNT(*) FROM dim_time").fetchone()[0])
+        conn.close()
+
+    connector = EmptyOperator(task_id="connector")
+
+    (
+        download_trip_updates()
+        >> extract_scheduled_stop_times()
+        >> compute_realtime_delays()
+        >> connector
+    )
+    (
+        download_vehicle_positions()
+        >> extract_vehicle_scheduled_stop_times()
+        >> compute_vehicle_times()
+        >> connector
+        >> join_trip_updates_and_vehicle_positions()
+        >> create_table_vehicle_next_stop_times()
+        >> store_vehicle_positions_with_trip_updates()
+        >> store_vehicle_positions_without_trip_updates()
+    )
+    # (extract_scheduled_stop_times() >> compute_realtime_delays() >> connector)
+    # (
+    #     extract_vehicle_scheduled_stop_times()
+    #     >> compute_vehicle_times()
+    #     >> connector
+    #     >> join_trip_updates_and_vehicle_positions()
+    #     >> create_table_vehicle_next_stop_times()
+    #     >> store_vehicle_positions_with_trip_updates()
+    #     >> store_vehicle_positions_without_trip_updates()
+    # )
 
 
 process_realtime_data()
