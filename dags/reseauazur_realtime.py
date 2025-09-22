@@ -31,7 +31,7 @@ load_dotenv()
     and each of their incoming stops until terminus,
     and store them in the duckDB database.
     """,
-    schedule="*/15 * * * *",
+    schedule=f"*/{os.environ["RT_XTR_FREQ"]} * * * *",
     start_date=pendulum.datetime(2025, 9, 5),
     end_date=pendulum.datetime(2025, 9, 30),
     default_args={"retries": 1},
@@ -721,6 +721,39 @@ def process_realtime_data():
         print(conn.sql("SELECT COUNT(*) FROM dim_time").fetchone()[0])
         conn.close()
 
+    @task(task_id="KPI_1", retries=0)
+    def total_average_delay_wrt_time():
+        """
+        #### Compute the average delay for all the trips that happened
+        during the day
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # TODO: il serait utile de limiter l'extraction au jour actuel.
+
+        # Insert data into table vehicle_next_stop_times
+        sql_query = "SELECT\n"
+        sql_query += "    t.date AS date,\n"
+        sql_query += f"    t.hour + (t.minute // {os.environ["RT_XTR_FREQ"]} + 1)*{os.environ["RT_XTR_FREQ"]}/60 AS time_{os.environ["RT_XTR_FREQ"]}min_accurate,\n"
+        sql_query += "    COUNT(fact.arrival_time_offset) AS nb_data,\n"
+        sql_query += "    AVG(fact.arrival_time_offset) AS avg_arrival_time_offset\n"
+        sql_query += "FROM\n"
+        sql_query += "    vehicle_next_stop_times AS fact\n"
+        sql_query += "INNER JOIN dim_time AS t\n"
+        sql_query += "ON t.event_ts = fact.vehicle_ts\n"
+        sql_query += "WHERE fact.arrival_time_offset IS NOT NULL\n"
+        sql_query += f"GROUP BY t.date, t.hour + (t.minute // {os.environ["RT_XTR_FREQ"]} + 1)*{os.environ["RT_XTR_FREQ"]}/60\n"
+        sql_query += f"ORDER BY t.date, time_{os.environ["RT_XTR_FREQ"]}min_accurate;\n"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/total_average_delay_wrt_time.csv",
+            index=False,
+        )
+
     connector = EmptyOperator(task_id="connector")
 
     (
@@ -738,6 +771,7 @@ def process_realtime_data():
         >> create_table_vehicle_next_stop_times()
         >> store_vehicle_positions_with_trip_updates()
         >> store_vehicle_positions_without_trip_updates()
+        >> [total_average_delay_wrt_time()]
     )
     # (extract_scheduled_stop_times() >> compute_realtime_delays() >> connector)
     # (
