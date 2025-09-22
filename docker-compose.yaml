@@ -83,12 +83,14 @@ x-airflow-common:
     GTFS_SCHEDULE_URL: ${GTFS_SCHEDULE_URL}
     GTFS_REALTIME_VP_URL: ${GTFS_REALTIME_VP_URL}
     GTFS_REALTIME_TU_URL: ${GTFS_REALTIME_TU_URL}
+    RT_XTR_FREQ: ${RT_XTR_FREQ}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:${WORK_DIR:-/opt/airflow}/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:${WORK_DIR:-/opt/airflow}/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:${WORK_DIR:-/opt/airflow}/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:${WORK_DIR:-/opt/airflow}/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/data:${WORK_DIR:-/opt/airflow}/data
+    - ${AIRFLOW_PROJ_DIR:-.}/kpi:${WORK_DIR:-/opt/airflow}/kpi
   networks:
     - reseauazur-network
   user: "${AIRFLOW_UID:-50000}:0"
@@ -123,6 +125,7 @@ services:
       retries: 5
       start_period: 5s
       timeout: 10s
+    restart: unless-stopped
 
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # Conteneur pour Redis: Intermédiaire entre le scheduler et les workers
@@ -141,7 +144,7 @@ services:
       timeout: 30s
       retries: 50
       start_period: 30s
-    restart: always
+    restart: unless-stopped
 
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   # Conteneur pour l'API accessible à http://localhost:8080.
@@ -159,7 +162,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: unless-stopped
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -180,7 +183,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: unless-stopped
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -200,7 +203,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: unless-stopped
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -229,7 +232,7 @@ services:
       # Required to handle warm shutdown of the celery workers properly
       # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
       DUMB_INIT_SETSID: "0"
-    restart: always
+    restart: unless-stopped
     depends_on:
       <<: *airflow-common-depends-on
       airflow-apiserver:
@@ -252,7 +255,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: unless-stopped
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -395,7 +398,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    restart: always
+    restart: unless-stopped
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
