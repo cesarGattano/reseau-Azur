@@ -1,6 +1,6 @@
 import os
 import pendulum
-from datetime import timedelta
+from datetime import timedelta, datetime
 import pandas as pd
 import requests
 from utils.utils import (
@@ -9,13 +9,14 @@ from utils.utils import (
     compute_time_offset,
     derive_on_time_status,
     get_service_date,
-    get_insert_vehicle_ts_in_dim_time_query,
+    get_insert_ts_in_dim_time_query,
     route_id_match_in_dim_route,
 )
 
 from airflow.sdk import dag, task
 from airflow.exceptions import AirflowException
 from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from duckdb_provider.hooks.duckdb_hook import DuckDBHook
 from google.transit import gtfs_realtime_pb2
 from dotenv import load_dotenv
@@ -59,6 +60,10 @@ def process_realtime_data():
         response = requests.get(os.environ["GTFS_REALTIME_VP_URL"])
         feed.ParseFromString(response.content)
         print(feed.header)
+        if feed.header.HasField("timestamp"):
+            xtr_timestamp = feed.header.timestamp
+        else:
+            raise AirflowException("Missing field header.timestamp")
 
         # Initialize the dataframe
         vehicle_positions = pd.DataFrame(
@@ -70,6 +75,7 @@ def process_realtime_data():
                 "timestamp",
                 "stop_id",
                 "vehicle_id",
+                "xtr_timestamp",
             ]
         )
 
@@ -124,6 +130,7 @@ def process_realtime_data():
                         "timestamp": timestamp,
                         "stop_id": stop_id,
                         "vehicle_id": vehicle_id,
+                        "xtr_timestamp": xtr_timestamp,
                     }
                 )
             else:
@@ -147,15 +154,17 @@ def process_realtime_data():
         hook = DuckDBHook.get_hook("duckdb_default")
         conn = hook.get_conn()
 
-        # TODO: INNER JOIN may exlcude some vehicles because
+        # Get for each vehicle the stop_sequence of the current vehicle stop
+
+        # TODO: INNER JOIN may exclude some vehicles because
         # their trip_id+stop_id do not find match in stop_times.txt
         # Investigate...
         sql_query = f"""
             SELECT
                 vp.vehicle_id AS vehicle_id,
                 vp.trip_id AS trip_id,
-                vp.stop_id AS stop_id,
-                st.stop_sequence AS stop_sequence
+                vp.stop_id AS current_stop_id,
+                st.stop_sequence AS current_stop_sequence
             FROM '{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions.csv' AS vp
             INNER JOIN
                 read_csv('{os.environ["WORK_DIR"]}/data/schedule/stop_times.csv') AS st
@@ -170,14 +179,18 @@ def process_realtime_data():
             index=False,
         )
 
+        # Get for each vehicle the stop_sequence of the current vehicle stop
         sql_query = f"""
             SELECT
                 vp.vehicle_id AS vehicle_id,
+                vp.xtr_timestamp AS xtr_ts,
                 vp.timestamp AS vehicle_ts,
                 vp.longitude AS longitude,
                 vp.latitude AS latitude,
                 vp.trip_id AS trip_id,
                 vp.route_id AS route_id,
+                ns.current_stop_id AS current_stop_id,
+                ns.current_stop_sequence AS current_stop_sequence,
                 st.stop_id AS stop_id,
                 st.stop_sequence AS stop_sequence,
                 st.arrival_time AS scheduled_arrival_time,
@@ -192,6 +205,10 @@ def process_realtime_data():
             INNER JOIN '{os.environ["WORK_DIR"]}/data/realtime/vehicle_next_stops.csv' AS ns
             ON
                 vp.vehicle_id = ns.vehicle_id
+            WHERE
+                st.stop_sequence >= ns.current_stop_sequence
+            ORDER BY
+                vehicle_id, stop_sequence;
         """
         vehicle_positions = conn.execute(sql_query).df()
         conn.close()
@@ -208,19 +225,22 @@ def process_realtime_data():
         ...
         """
 
-        service_year, service_month, service_day = get_service_date()
+        service_date, service_year, service_month, service_day = get_service_date()
 
         # Collect
         vehicle_positions = pd.read_csv(
             f"{os.environ["WORK_DIR"]}/data/realtime/vehicle_positions_compl.csv",
             keep_default_na=False,
-            dtype={"vehicle_ts": "Int64"},
+            dtype={"vehicle_ts": "Int64", "xtr_ts": "Int64"},
         )
         # Convert
-        key = "vehicle_ts"
+        vehicle_positions["xtr_ts"] = vehicle_positions.apply(
+            convert_timestamp_into_france_datetime, axis=1, key="xtr_ts"
+        )
         vehicle_positions["vehicle_ts"] = vehicle_positions.apply(
             convert_timestamp_into_france_datetime, axis=1, key="vehicle_ts"
         )
+        vehicle_positions["service_date"] = service_date
         vehicle_positions["scheduled_arrival_time"] = vehicle_positions.apply(
             convert_scheduled_time_into_france_datetime,
             axis=1,
@@ -248,6 +268,10 @@ def process_realtime_data():
         response = requests.get(os.environ["GTFS_REALTIME_TU_URL"])
         feed.ParseFromString(response.content)
         print(feed.header)
+        if feed.header.HasField("timestamp"):
+            xtr_timestamp = feed.header.timestamp
+        else:
+            raise AirflowException("Missing field header.timestamp")
 
         trip_updates = pd.DataFrame(
             columns=[
@@ -257,6 +281,7 @@ def process_realtime_data():
                 "stop_sequence",
                 "arrival_time",
                 "departure_time",
+                "xtr_timestamp",
             ]
         )
 
@@ -293,9 +318,8 @@ def process_realtime_data():
                             missing_arrival_time_count += 1
                             arrival_time = None
                     else:
-                        raise AirflowException(
-                            "Missing field trip_update.stop_time_update.arrival"
-                        )
+                        missing_arrival_time_count += 1
+                        arrival_time = None
 
                     if stop_time_update.HasField("departure"):
                         if stop_time_update.departure.HasField("time"):
@@ -304,9 +328,8 @@ def process_realtime_data():
                             missing_departure_time_count += 1
                             departure_time = None
                     else:
-                        raise AirflowException(
-                            "Missing field trip_update.stop_time_update.departure"
-                        )
+                        missing_departure_time_count += 1
+                        departure_time = None
 
                     if stop_time_update.HasField("stop_id"):
                         stop_id = stop_time_update.stop_id
@@ -325,6 +348,7 @@ def process_realtime_data():
                             "stop_sequence": stop_sequence,
                             "arrival_time": arrival_time,
                             "departure_time": departure_time,
+                            "xtr_timestamp": xtr_timestamp,
                         }
                     )
 
@@ -352,6 +376,7 @@ def process_realtime_data():
         # TODO: check known errors from transport.data.gouv.fr
         sql_query = f"""
             SELECT
+                tu.xtr_timestamp AS xtr_ts,
                 tu.trip_id AS trip_id,
                 tu.route_id AS route_id,
                 tu.stop_id AS stop_id,
@@ -385,15 +410,22 @@ def process_realtime_data():
         ...
         """
 
-        service_year, service_month, service_day = get_service_date()
+        service_date, service_year, service_month, service_day = get_service_date()
 
         # Collect
         trip_updates = pd.read_csv(
             f"{os.environ["WORK_DIR"]}/data/realtime/trip_updates_compl.csv",
             keep_default_na=False,
-            dtype={"real_arrival_time": "Int64", "real_departure_time": "Int64"},
+            dtype={
+                "real_arrival_time": "Int64",
+                "real_departure_time": "Int64",
+                "xtr_ts": "Int64",
+            },
         )
         # Convert
+        trip_updates["xtr_ts"] = trip_updates.apply(
+            convert_timestamp_into_france_datetime, axis=1, key="xtr_ts"
+        )
         trip_updates["real_arrival_time"] = trip_updates.apply(
             convert_timestamp_into_france_datetime, axis=1, key="real_arrival_time"
         )
@@ -453,12 +485,16 @@ def process_realtime_data():
         # TODO: check known errors from transport.data.gouv.fr
         sql_query = f"""
             SELECT
+                vp.xtr_ts AS xtr_ts,
                 vp.vehicle_id AS vehicle_id,
                 vp.vehicle_ts AS vehicle_ts,
                 vp.trip_id AS trip_id,
                 vp.route_id AS route_id,
+                vp.current_stop_id AS current_stop_id,
+                vp.current_stop_sequence AS current_stop_sequence,
                 vp.stop_id AS stop_id,
                 vp.stop_sequence AS stop_sequence,
+                vp.service_date AS service_date,
                 vp.longitude AS longitude,
                 vp.latitude AS latitude,
                 tu.real_arrival_time AS real_arrival_time,
@@ -493,12 +529,16 @@ def process_realtime_data():
         # TODO: check known errors from transport.data.gouv.fr
         sql_query = f"""
         SELECT
+            vp.xtr_ts AS xtr_ts,
             vp.vehicle_id AS vehicle_id,
             vp.vehicle_ts AS vehicle_ts,
             vp.trip_id AS trip_id,
             vp.route_id AS route_id,
+            vp.current_stop_id AS current_stop_id,
+            vp.current_stop_sequence AS current_stop_sequence,
             vp.stop_id AS stop_id,
             vp.stop_sequence AS stop_sequence,
+            vp.service_date AS service_date,
             vp.longitude AS longitude,
             vp.latitude AS latitude,
             vp.scheduled_arrival_time AS scheduled_arrival_time,
@@ -554,12 +594,16 @@ def process_realtime_data():
         sql_query = """
             CREATE TABLE IF NOT EXISTS vehicle_next_stop_times (
                 position_id INTEGER NOT NULL DEFAULT nextval('position_id'),
-                vehicle_ts TIMESTAMP WITH TIME ZONE NOT NULL REFERENCES dim_time(event_ts),
-                stop_id VARCHAR NOT NULL REFERENCES dim_stop(id),
-                trip_id VARCHAR NOT NULL REFERENCES dim_trip(id),
-                route_id VARCHAR NOT NULL REFERENCES dim_route(id),
-                stop_sequence INTEGER NOT NULL,
                 vehicle_id VARCHAR NOT NULL,
+                xtr_ts TIMESTAMP WITH TIME ZONE NOT NULL REFERENCES dim_time(event_ts),
+                vehicle_ts TIMESTAMP WITH TIME ZONE NOT NULL REFERENCES dim_time(event_ts),
+                route_id VARCHAR NOT NULL REFERENCES dim_route(id),
+                trip_id VARCHAR NOT NULL REFERENCES dim_trip(id),
+                current_stop_id VARCHAR NOT NULL REFERENCES dim_stop(id),
+                stop_id VARCHAR NOT NULL REFERENCES dim_stop(id),
+                current_stop_sequence INTEGER NOT NULL,
+                stop_sequence INTEGER NOT NULL,
+                service_date DATE NOT NULL,
                 scheduled_arrival_time TIMESTAMP WITH TIME ZONE NOT NULL,
                 scheduled_departure_time TIMESTAMP WITH TIME ZONE NOT NULL,
                 real_arrival_time TIMESTAMP WITH TIME ZONE,
@@ -594,8 +638,12 @@ def process_realtime_data():
 
         for _, row in vehicule_positions.iterrows():
 
+            # Insert extraction timestamp in dim_time if not exist
+            sql_query = get_insert_ts_in_dim_time_query(row, "xtr_ts")
+            conn.execute(sql_query)
+
             # Insert vehicle timestamp in dim_time if not exist
-            sql_query = get_insert_vehicle_ts_in_dim_time_query(row)
+            sql_query = get_insert_ts_in_dim_time_query(row, "vehicle_ts")
             conn.execute(sql_query)
 
             # Known error from data.gouv.fr:
@@ -605,12 +653,16 @@ def process_realtime_data():
 
             # Insert data into table vehicle_next_stop_times
             sql_query = "INSERT OR IGNORE INTO vehicle_next_stop_times (\n"
-            sql_query += "    vehicle_ts,\n"
-            sql_query += "    stop_id,\n"
-            sql_query += "    trip_id,\n"
-            sql_query += "    route_id,\n"
-            sql_query += "    stop_sequence,\n"
             sql_query += "    vehicle_id,\n"
+            sql_query += "    xtr_ts,\n"
+            sql_query += "    vehicle_ts,\n"
+            sql_query += "    route_id,\n"
+            sql_query += "    trip_id,\n"
+            sql_query += "    current_stop_id,\n"
+            sql_query += "    stop_id,\n"
+            sql_query += "    current_stop_sequence,\n"
+            sql_query += "    stop_sequence,\n"
+            sql_query += "    service_date,\n"
             sql_query += "    scheduled_arrival_time,\n"
             sql_query += "    scheduled_departure_time,\n"
             if row["real_arrival_time"]:
@@ -626,12 +678,16 @@ def process_realtime_data():
             sql_query += "    latitude,\n"
             sql_query += "    longitude\n"
             sql_query += ") VALUES (\n"
-            sql_query += f"    '{row["vehicle_ts"]}',\n"
-            sql_query += f"    '{row["stop_id"]}',\n"
-            sql_query += f"    '{row["trip_id"]}',\n"
-            sql_query += f"    '{row["route_id"]}',\n"
-            sql_query += f"    {row["stop_sequence"]},\n"
             sql_query += f"    '{row["vehicle_id"]}',\n"
+            sql_query += f"    '{row["xtr_ts"]}',\n"
+            sql_query += f"    '{row["vehicle_ts"]}',\n"
+            sql_query += f"    '{row["route_id"]}',\n"
+            sql_query += f"    '{row["trip_id"]}',\n"
+            sql_query += f"    '{row["current_stop_id"]}',\n"
+            sql_query += f"    '{row["stop_id"]}',\n"
+            sql_query += f"    {row["current_stop_sequence"]},\n"
+            sql_query += f"    {row["stop_sequence"]},\n"
+            sql_query += f"    '{row["service_date"]}',\n"
             sql_query += f"    '{row["scheduled_arrival_time"]}',\n"
             sql_query += f"    '{row["scheduled_departure_time"]}',\n"
             if row["real_arrival_time"]:
@@ -670,8 +726,12 @@ def process_realtime_data():
 
         for _, row in vehicule_positions.iterrows():
 
+            # Insert extraction timestamp in dim_time if not exist
+            sql_query = get_insert_ts_in_dim_time_query(row, "xtr_ts")
+            conn.execute(sql_query)
+
             # Insert vehicle timestamp in dim_time if not exist
-            sql_query = get_insert_vehicle_ts_in_dim_time_query(row)
+            sql_query = get_insert_ts_in_dim_time_query(row, "vehicle_ts")
             conn.execute(sql_query)
 
             # Known error from data.gouv.fr:
@@ -681,12 +741,16 @@ def process_realtime_data():
 
             # Insert data into table vehicle_next_stop_times
             sql_query = "INSERT OR IGNORE INTO vehicle_next_stop_times (\n"
-            sql_query += "    vehicle_ts,\n"
-            sql_query += "    stop_id,\n"
-            sql_query += "    trip_id,\n"
-            sql_query += "    route_id,\n"
-            sql_query += "    stop_sequence,\n"
             sql_query += "    vehicle_id,\n"
+            sql_query += "    xtr_ts,\n"
+            sql_query += "    vehicle_ts,\n"
+            sql_query += "    route_id,\n"
+            sql_query += "    trip_id,\n"
+            sql_query += "    current_stop_id,\n"
+            sql_query += "    stop_id,\n"
+            sql_query += "    current_stop_sequence,\n"
+            sql_query += "    stop_sequence,\n"
+            sql_query += "    service_date,\n"
             sql_query += "    scheduled_arrival_time,\n"
             sql_query += "    scheduled_departure_time,\n"
             sql_query += "    real_arrival_time,\n"
@@ -698,12 +762,16 @@ def process_realtime_data():
             sql_query += "    latitude,\n"
             sql_query += "    longitude\n"
             sql_query += ") VALUES (\n"
-            sql_query += f"    '{row["vehicle_ts"]}',\n"
-            sql_query += f"    '{row["stop_id"]}',\n"
-            sql_query += f"    '{row["trip_id"]}',\n"
-            sql_query += f"    '{row["route_id"]}',\n"
-            sql_query += f"    {row["stop_sequence"]},\n"
             sql_query += f"    '{row["vehicle_id"]}',\n"
+            sql_query += f"    '{row["xtr_ts"]}',\n"
+            sql_query += f"    '{row["vehicle_ts"]}',\n"
+            sql_query += f"    '{row["route_id"]}',\n"
+            sql_query += f"    '{row["trip_id"]}',\n"
+            sql_query += f"    '{row["current_stop_id"]}',\n"
+            sql_query += f"    '{row["stop_id"]}',\n"
+            sql_query += f"    {row["current_stop_sequence"]},\n"
+            sql_query += f"    {row["stop_sequence"]},\n"
+            sql_query += f"    '{row["service_date"]}',\n"
             sql_query += f"    '{row["scheduled_arrival_time"]}',\n"
             sql_query += f"    '{row["scheduled_departure_time"]}',\n"
             sql_query += f"    '{row["scheduled_arrival_time"]}',\n"
@@ -721,8 +789,72 @@ def process_realtime_data():
         print(conn.sql("SELECT COUNT(*) FROM dim_time").fetchone()[0])
         conn.close()
 
-    @task(task_id="KPI_1", retries=0)
-    def total_average_delay_wrt_time():
+    def get_last_xtr_ts() -> datetime:
+        """
+        #### Get the last RT extraction timestamp
+        ...
+        """
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # Insert data into table vehicle_next_stop_times
+        sql_query = "SELECT MAX(xtr_ts) FROM vehicle_next_stop_times;"
+        print(sql_query)
+        max_xtr_ts = conn.execute(sql_query).fetchone()[0]
+        print("Last extraction timestamp: ", max_xtr_ts)
+        print(type(max_xtr_ts))
+        return max_xtr_ts
+
+    last_xtr_ts = PythonOperator(
+        task_id="get_last_xtr_ts",
+        python_callable=get_last_xtr_ts,
+        retries=5,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_vehicle_ts_outliers(ti):
+        """
+        #### Find the vehicle with old position timestamp for realtime data
+        ...
+        """
+        max_xtr_ts = ti.xcom_pull(task_ids="get_last_xtr_ts")
+        print(max_xtr_ts)
+
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        # Insert data into table vehicle_next_stop_times
+        sql_query = "SELECT\n"
+        sql_query += "    vehicle_id,\n"
+        sql_query += "    xtr_ts,\n"
+        sql_query += "    vehicle_ts,\n"
+        sql_query += "    date_diff ('minute', vehicle_ts, xtr_ts) AS ts_diff_in_min\n"
+        sql_query += "FROM\n"
+        sql_query += "    vehicle_next_stop_times\n"
+        sql_query += "WHERE\n"
+        sql_query += f"    xtr_ts = '{max_xtr_ts}'\n"
+        sql_query += "GROUP BY\n"
+        sql_query += "    vehicle_id, xtr_ts, vehicle_ts\n"
+        sql_query += "HAVING\n"
+        sql_query += "    15 <= ts_diff_in_min\n"
+        sql_query += "ORDER BY\n"
+        sql_query += "    vehicle_id, xtr_ts DESC;\n"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/vehicle_ts_outliers.csv",
+            index=False,
+        )
+
+    vehicle_ts_outliers = PythonOperator(
+        task_id="KPI_vehicle_ts_outliers",
+        python_callable=get_vehicle_ts_outliers,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_total_average_delay_wrt_time():
         """
         #### Compute the average delay for all the trips that happened
         during the day
@@ -732,20 +864,20 @@ def process_realtime_data():
         conn = hook.get_conn()
 
         # TODO: il serait utile de limiter l'extraction au jour actuel.
-
         # Insert data into table vehicle_next_stop_times
         sql_query = "SELECT\n"
-        sql_query += "    t.date AS date,\n"
-        sql_query += f"    t.hour + (t.minute // {os.environ["RT_XTR_FREQ"]} + 1)*{os.environ["RT_XTR_FREQ"]}/60 AS time_{os.environ["RT_XTR_FREQ"]}min_accurate,\n"
-        sql_query += "    COUNT(fact.arrival_time_offset) AS nb_data,\n"
+        sql_query += "    fact.xtr_ts AS xtr_ts,\n"
+        sql_query += "    COUNT(fact.arrival_time_offset) AS nb_data_arrival,\n"
         sql_query += "    AVG(fact.arrival_time_offset) AS avg_arrival_time_offset\n"
         sql_query += "FROM\n"
         sql_query += "    vehicle_next_stop_times AS fact\n"
         sql_query += "INNER JOIN dim_time AS t\n"
-        sql_query += "ON t.event_ts = fact.vehicle_ts\n"
-        sql_query += "WHERE fact.arrival_time_offset IS NOT NULL\n"
-        sql_query += f"GROUP BY t.date, t.hour + (t.minute // {os.environ["RT_XTR_FREQ"]} + 1)*{os.environ["RT_XTR_FREQ"]}/60\n"
-        sql_query += f"ORDER BY t.date, time_{os.environ["RT_XTR_FREQ"]}min_accurate;\n"
+        sql_query += "ON t.event_ts = fact.xtr_ts\n"
+        sql_query += "WHERE\n"
+        sql_query += "    fact.arrival_time_offset IS NOT NULL\n"
+        sql_query += f"    AND date_diff ('minute', fact.vehicle_ts, fact.xtr_ts) <= {os.environ["RT_XTR_FREQ"]}\n"
+        sql_query += "GROUP BY fact.xtr_ts\n"
+        sql_query += "ORDER BY fact.xtr_ts DESC;"
         print(sql_query)
         result = conn.execute(sql_query).df()
         # Store
@@ -753,6 +885,152 @@ def process_realtime_data():
             f"{os.environ["WORK_DIR"]}/kpi/total_average_delay_wrt_time.csv",
             index=False,
         )
+
+    total_average_delay_wrt_time = PythonOperator(
+        task_id="KPI_total_avg_delay_wrt_time",
+        python_callable=get_total_average_delay_wrt_time,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_vehicle_positions_with_delay(ti):
+        """
+        #### Extract each instantaneous vehicle position with
+        their current delay for the next stop
+        ...
+        """
+        max_xtr_ts = ti.xcom_pull(task_ids="get_last_xtr_ts")
+        print(max_xtr_ts)
+
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        sql_query = "SELECT\n"
+        sql_query += "    vehicle_id,\n"
+        sql_query += "    longitude,\n"
+        sql_query += "    latitude,\n"
+        sql_query += "    arrival_time_offset,\n"
+        sql_query += "    departure_time_offset,\n"
+        sql_query += "    current_stop_id,\n"
+        sql_query += "    current_stop_sequence\n"
+        sql_query += "FROM vehicle_next_stop_times\n"
+        sql_query += "WHERE\n"
+        sql_query += "    current_stop_id = stop_id\n"
+        sql_query += "    AND current_stop_sequence = stop_sequence\n"
+        sql_query += f"    AND xtr_ts = '{max_xtr_ts}'\n"
+        sql_query += f"    AND date_diff ('minute', vehicle_ts, xtr_ts) <= {os.environ["RT_XTR_FREQ"]}\n"
+        sql_query += "ORDER BY\n"
+        sql_query += "    vehicle_id;"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/vehicle_positions_with_delay.csv",
+            index=False,
+        )
+
+    vehicle_positions_with_delay = PythonOperator(
+        task_id="KPI_vehicle_pos_with_delay",
+        python_callable=get_vehicle_positions_with_delay,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_station_positions_with_avg_delay(ti):
+        """
+        #### Extract the main station positions with
+        the average delay of the vehicles in approach
+        ...
+        """
+        max_xtr_ts = ti.xcom_pull(task_ids="get_last_xtr_ts")
+        print(max_xtr_ts)
+
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        sql_query = "WITH new_dim_stop AS (\n"
+        sql_query += "    SELECT\n"
+        sql_query += "        st.id AS id,\n"
+        sql_query += "        CASE\n"
+        sql_query += "            WHEN st.parent_station IS NULL THEN st.id\n"
+        sql_query += "            ELSE st.parent_station\n"
+        sql_query += "        END AS stop_id,\n"
+        sql_query += "        CASE\n"
+        sql_query += "            WHEN st.parent_station IS NULL THEN st.lon\n"
+        sql_query += "            ELSE pst.lon\n"
+        sql_query += "        END AS longitude,\n"
+        sql_query += "        CASE\n"
+        sql_query += "            WHEN st.parent_station IS NULL THEN st.lat\n"
+        sql_query += "            ELSE pst.lat\n"
+        sql_query += "        END AS latitude,\n"
+        sql_query += "    FROM dim_stop AS st\n"
+        sql_query += "    LEFT JOIN dim_stop AS pst\n"
+        sql_query += "    ON st.parent_station = pst.id\n"
+        sql_query += "    )\n"
+        sql_query += "SELECT\n"
+        sql_query += "    ANY_VALUE(st.longitude) AS longitude,\n"
+        sql_query += "    ANY_VALUE(st.latitude) AS latitude,\n"
+        sql_query += "    COUNT(v.arrival_time_offset) AS nb_arrival_time_offset,\n"
+        sql_query += "    AVG(v.arrival_time_offset) AS avg_arrival_time_offset,\n"
+        sql_query += "    COUNT(v.departure_time_offset) AS nb_departure_time_offset,\n"
+        sql_query += "    AVG(v.departure_time_offset) AS avg_departure_time_offset\n"
+        sql_query += "FROM new_dim_stop AS st\n"
+        sql_query += "LEFT JOIN vehicle_next_stop_times AS v\n"
+        sql_query += "ON v.stop_id = st.id\n"
+        sql_query += f"WHERE v.xtr_ts = '{max_xtr_ts}'\n"
+        sql_query += "GROUP BY st.stop_id;"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/station_positions_with_avg_delay.csv",
+            index=False,
+        )
+
+    station_positions_with_avg_delay = PythonOperator(
+        task_id="KPI_station_pos_with_delay",
+        python_callable=get_station_positions_with_avg_delay,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_route_total_average_delay():
+        """
+        #### Extract the total average delay (no time boundary)
+        for each route
+        ...
+        """
+
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        sql_query = "SELECT\n"
+        sql_query += "    ANY_VALUE(r.short_name) AS name,\n"
+        sql_query += "    ANY_VALUE(r.color) AS color,\n"
+        sql_query += "    COUNT(v.arrival_time_offset) AS nb_arrival_time_offset,\n"
+        sql_query += "    AVG(v.arrival_time_offset) AS avg_arrival_time_offset\n"
+        sql_query += "    COUNT(v.departure_time_offset) AS nb_departure_time_offset,\n"
+        sql_query += "    AVG(v.departure_time_offset) AS avg_departure_time_offset\n"
+        sql_query += "FROM\n"
+        sql_query += "    vehicle_next_stop_times AS v\n"
+        sql_query += "    LEFT JOIN dim_route AS r ON v.route_id = r.id\n"
+        sql_query += "GROUP BY\n"
+        sql_query += "    v.route_id\n"
+        sql_query += "ORDER BY name;"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/route_with_tot_avg_delay.csv",
+            index=False,
+        )
+
+    route_tot_avg_delay = PythonOperator(
+        task_id="KPI_route_with_delay",
+        python_callable=get_route_total_average_delay,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
 
     connector = EmptyOperator(task_id="connector")
 
@@ -771,7 +1049,14 @@ def process_realtime_data():
         >> create_table_vehicle_next_stop_times()
         >> store_vehicle_positions_with_trip_updates()
         >> store_vehicle_positions_without_trip_updates()
-        >> [total_average_delay_wrt_time()]
+        >> last_xtr_ts
+        >> [
+            vehicle_ts_outliers,
+            total_average_delay_wrt_time,
+            vehicle_positions_with_delay,
+            station_positions_with_avg_delay,
+            route_tot_avg_delay,
+        ]
     )
     # (extract_scheduled_stop_times() >> compute_realtime_delays() >> connector)
     # (
