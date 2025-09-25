@@ -211,6 +211,8 @@ dags/files/
 data/
 config/
 logs/
+kpi/
 
 # Database
 *.db
+

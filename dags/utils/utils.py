@@ -49,7 +49,7 @@ def derive_on_time_status(row, key_time_offset: str) -> int | None:
         return -1
 
 
-def get_service_date() -> tuple[int, int, int]:
+def get_service_date() -> tuple[str, int, int, int]:
     """Get service year, month and day
     Between 0:00 and 3:00 we consider the service date
     to be still the previous day. In other words, change
@@ -66,7 +66,42 @@ def get_service_date() -> tuple[int, int, int]:
     else:
         service_datetime = now_datetime
 
-    return (service_datetime.year, service_datetime.month, service_datetime.day)
+    return (
+        service_datetime.to_date_string(),
+        service_datetime.year,
+        service_datetime.month,
+        service_datetime.day,
+    )
+
+
+def get_insert_ts_in_dim_time_query(row, key: str) -> str:
+    ts = pendulum.parse(row[key])
+    return f"""
+        INSERT OR IGNORE INTO dim_time (
+            event_ts,
+            date,
+            year,
+            month,
+            day_of_month,
+            week,
+            day_of_week,
+            time,
+            hour,
+            minute
+        )
+        VALUES (
+            '{ts}',
+            '{ts.to_date_string()}',
+            {ts.year},
+            {ts.month},
+            {ts.day},
+            {ts.week_of_year},
+            {ts.day_of_week + 1},
+            '{ts.to_time_string()}',
+            {ts.hour},
+            {ts.minute}
+        );
+    """
 
 
 def get_insert_vehicle_ts_in_dim_time_query(row) -> str:
