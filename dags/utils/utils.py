@@ -82,7 +82,9 @@ def get_insert_ts_in_dim_time_query(row, key: str) -> str:
             date,
             year,
             month,
+            day_of_month,
             week,
+            day_of_week,
             time,
             hour,
             minute
@@ -92,7 +94,9 @@ def get_insert_ts_in_dim_time_query(row, key: str) -> str:
             '{ts.to_date_string()}',
             {ts.year},
             {ts.month},
+            {ts.day},
             {ts.week_of_year},
+            {ts.day_of_week + 1},
             '{ts.to_time_string()}',
             {ts.hour},
             {ts.minute}
@@ -132,4 +136,3 @@ def route_id_match_in_dim_route(row, conn) -> bool:
     """
     n_match = conn.sql(sql_query).fetchone()[0]
     return n_match > 0
-

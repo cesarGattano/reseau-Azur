@@ -1008,7 +1008,7 @@ def process_realtime_data():
         sql_query += "    ANY_VALUE(r.short_name) AS name,\n"
         sql_query += "    ANY_VALUE(r.color) AS color,\n"
         sql_query += "    COUNT(v.arrival_time_offset) AS nb_arrival_time_offset,\n"
-        sql_query += "    AVG(v.arrival_time_offset) AS avg_arrival_time_offset\n"
+        sql_query += "    AVG(v.arrival_time_offset) AS avg_arrival_time_offset,\n"
         sql_query += "    COUNT(v.departure_time_offset) AS nb_departure_time_offset,\n"
         sql_query += "    AVG(v.departure_time_offset) AS avg_departure_time_offset\n"
         sql_query += "FROM\n"
@@ -1028,6 +1028,139 @@ def process_realtime_data():
     route_tot_avg_delay = PythonOperator(
         task_id="KPI_route_with_delay",
         python_callable=get_route_total_average_delay,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_avg_delay_for_each_dow_and_time():
+        """
+        #### Get the average delay for each (day of week, time)
+        on the full network
+        """
+
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        sql_query = "SELECT\n"
+        sql_query += "    t.day_of_week,\n"
+        sql_query += "    t.time,\n"
+        sql_query += "    COUNT(v.arrival_time_offset) AS nb_arrival_time_offset,\n"
+        sql_query += "    AVG(v.arrival_time_offset) AS avg_arrival_time_offset,\n"
+        sql_query += "    COUNT(v.departure_time_offset) AS nb_departure_time_offset,\n"
+        sql_query += "    AVG(v.departure_time_offset) AS avg_departure_time_offset\n"
+        sql_query += "FROM\n"
+        sql_query += "    vehicle_next_stop_times AS v\n"
+        sql_query += "    LEFT JOIN dim_time AS t ON v.xtr_ts = t.event_ts\n"
+        sql_query += "WHERE\n"
+        sql_query += f"    date_diff ('minute', v.vehicle_ts, v.xtr_ts) <= {os.environ["RT_XTR_FREQ"]}\n"
+        sql_query += "GROUP BY t.day_of_week, t.time\n"
+        sql_query += "ORDER BY t.day_of_week, t.time;\n"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/avg_delay_per_dow_and_time.csv",
+            index=False,
+        )
+
+    avg_delay_for_each_dow_time = PythonOperator(
+        task_id="KPI_delay_per_day_and_time",
+        python_callable=get_avg_delay_for_each_dow_and_time,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_nb_on_time_vehicle(ti):
+        """
+        #### Get the number of on time vehicle
+        """
+        max_xtr_ts = ti.xcom_pull(task_ids="get_last_xtr_ts")
+        print(max_xtr_ts)
+
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        sql_query = "WITH vehicle_status AS (\n"
+        sql_query += "    SELECT\n"
+        sql_query += "        vehicle_id,\n"
+        sql_query += (
+            "        ANY_VALUE(arrival_on_time_status) AS arrival_on_time_status,\n"
+        )
+        sql_query += (
+            "        ANY_VALUE(departure_on_time_status) AS departure_on_time_status\n"
+        )
+        sql_query += "    FROM vehicle_next_stop_times\n"
+        sql_query += "    WHERE\n"
+        sql_query += f"        xtr_ts = '{max_xtr_ts}'\n"
+        sql_query += f"        AND date_diff ('minute', vehicle_ts, xtr_ts) <= {os.environ["RT_XTR_FREQ"]}\n"
+        sql_query += "    GROUP BY vehicle_id\n"
+        sql_query += ")\n"
+        sql_query += "SELECT\n"
+        sql_query += "    SUM(\n"
+        sql_query += "        CASE\n"
+        sql_query += "            WHEN arrival_on_time_status >= 0 THEN 1\n"
+        sql_query += "            ELSE 0\n"
+        sql_query += "        END) AS nb_vehicle,\n"
+        sql_query += "    SUM(\n"
+        sql_query += "        CASE\n"
+        sql_query += "            WHEN arrival_on_time_status = 0 THEN 1\n"
+        sql_query += "            ELSE 0\n"
+        sql_query += "        END) AS nb_on_time_vehicle,\n"
+        sql_query += "    SUM(\n"
+        sql_query += "        CASE\n"
+        sql_query += "            WHEN arrival_on_time_status = 1 THEN 1\n"
+        sql_query += "            ELSE 0\n"
+        sql_query += "        END) AS nb_nearly_on_time_vehicle\n"
+        sql_query += "FROM vehicle_status;\n"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/nb_on_time_vehicle.csv",
+            index=False,
+        )
+
+    nb_on_time_vehicle = PythonOperator(
+        task_id="KPI_nb_on_time_vehicle",
+        python_callable=get_nb_on_time_vehicle,
+        retries=60,
+        retry_delay=timedelta(seconds=1),
+    )
+
+    def get_stop_delay_with_time():
+        """
+        #### Get the delay for each stop, each trip, each route, each scheduled_arrival_time
+        """
+
+        hook = DuckDBHook.get_hook("duckdb_default")
+        conn = hook.get_conn()
+
+        sql_query = "SELECT\n"
+        sql_query += "    stop_id,\n"
+        sql_query += "    route_id,\n"
+        sql_query += "    trip_id,\n"
+        sql_query += "    scheduled_arrival_time,\n"
+        sql_query += "    COUNT(arrival_time_offset) as nb_arrival_time_offset,\n"
+        sql_query += "    median(arrival_time_offset) as median_arrival_time_offset\n"
+        sql_query += "FROM vehicle_next_stop_times\n"
+        sql_query += "WHERE xtr_ts < real_arrival_time\n"
+        sql_query += f"AND date_diff ('minute', scheduled_arrival_time, xtr_ts) <= {os.environ["RT_XTR_FREQ"]}/2\n"
+        sql_query += f"AND -{os.environ["RT_XTR_FREQ"]}/2 <= date_diff ('minute', scheduled_arrival_time, xtr_ts)\n"
+        sql_query += f"AND date_diff ('minute', vehicle_ts, xtr_ts) <= {os.environ["RT_XTR_FREQ"]}\n"
+        sql_query += "AND stop_id = 4271 AND route_id = '09'\n"
+        sql_query += "GROUP BY stop_id, route_id, trip_id, scheduled_arrival_time\n"
+        sql_query += "ORDER BY route_id, stop_id, scheduled_arrival_time;"
+        print(sql_query)
+        result = conn.execute(sql_query).df()
+        # Store
+        result.to_csv(
+            f"{os.environ["WORK_DIR"]}/kpi/delay_evolution_per_stop.csv",
+            index=False,
+        )
+
+    delay_evolution_per_stop = PythonOperator(
+        task_id="KPI_delay_evolution_per_stop",
+        python_callable=get_stop_delay_with_time,
         retries=60,
         retry_delay=timedelta(seconds=1),
     )
@@ -1056,6 +1189,9 @@ def process_realtime_data():
             vehicle_positions_with_delay,
             station_positions_with_avg_delay,
             route_tot_avg_delay,
+            avg_delay_for_each_dow_time,
+            nb_on_time_vehicle,
+            delay_evolution_per_stop,
         ]
     )
     # (extract_scheduled_stop_times() >> compute_realtime_delays() >> connector)
